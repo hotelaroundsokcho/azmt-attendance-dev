@@ -1,0 +1,3249 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="robots" content="noindex, nofollow">
+<title>[DEV] AZMT 근태 통합 시스템</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+<style>
+/* ===== 디자인 토큰 (v13 미리보기와 동일 계열 유지) ===== */
+:root{
+  --bg:#EDF1F3; --surface:#FAFBFC; --surface-2:#F1F5F7; --ink:#13232B; --ink-2:#496069; --line:#D3DDE2;
+  --accent:#1D5C72; --accent-soft:#DCEAF0; --accent-line:#8DB3C1; --on-accent:#FFFFFF;
+  --ok:#1D7A52; --ok-soft:#DDF0E6; --warn:#A9650A; --warn-soft:#F8EBD2; --crit:#B03A30; --crit-soft:#F6DEDB;
+  --lamp:#D99A1B;
+  --font-body:'IBM Plex Sans KR','Apple SD Gothic Neo','Malgun Gothic',system-ui,sans-serif;
+  --font-mono:'IBM Plex Mono',ui-monospace,'SFMono-Regular',Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0E1A20; --surface:#15252D; --surface-2:#1B2F38; --ink:#E4EEF2; --ink-2:#9AB0BA; --line:#2A424C;
+    --accent:#6BBAD0; --accent-soft:#1E3A45; --accent-line:#3E6B7B; --on-accent:#0A1A20;
+    --ok:#5CC596; --ok-soft:#183A2D; --warn:#E3A84A; --warn-soft:#3C2E14; --crit:#F0847A; --crit-soft:#431E1B;
+    --lamp:#F2B84B;
+  }
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:16px;line-height:1.5;
+  padding:env(safe-area-inset-top) max(16px,env(safe-area-inset-right)) env(safe-area-inset-bottom) max(16px,env(safe-area-inset-left))}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+[hidden]{display:none !important}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+h1,h2,p{margin:0}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.sub{color:var(--ink-2);font-size:14px}
+
+/* ===== 로그인·PIN 변경 ===== */
+.auth{min-height:100vh;min-height:100dvh;display:flex;align-items:center;justify-content:center;padding-block:24px}
+.auth-card{width:100%;max-width:400px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:24px 22px 20px;
+  animation:rise .22s ease-out}
+@keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.brand{display:flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:13px;letter-spacing:.16em;color:var(--ink-2);text-transform:uppercase}
+.brand i{width:8px;height:8px;border-radius:50%;background:var(--lamp);box-shadow:0 0 8px var(--lamp);display:inline-block}
+.auth-card h1{font-size:22px;font-weight:600;letter-spacing:-.01em;margin:10px 0 4px}
+.auth-card h1:focus{outline:none}
+.fld{margin-top:16px}
+.fld label{display:block;font-size:14px;color:var(--ink-2);margin-bottom:4px}
+.fld .row{display:flex;gap:8px}
+.fld input,.fld select{width:100%;min-height:46px;border:1px solid var(--line);background:var(--surface);border-radius:9px;padding:9px 12px;font-size:17px}
+.fld input.mono{letter-spacing:.12em}
+.fld input[aria-invalid="true"],.fld select[aria-invalid="true"]{border-color:var(--crit)}
+.fld .hint{font-size:13px;color:var(--ink-2);margin-top:4px}
+.btn{min-height:44px;border:1px solid var(--line);background:var(--surface);border-radius:9px;padding:8px 16px;font-weight:500}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600}
+.btn.block{width:100%;margin-top:20px;min-height:48px;font-size:17px}
+.btn.small{min-height:40px;padding:6px 12px;font-size:14px}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.msg{border-radius:9px;padding:9px 12px;font-size:15px;margin-top:14px}
+.msg.bad{background:var(--crit-soft);color:var(--crit)}
+.msg.ok{background:var(--ok-soft);color:var(--ok)}
+.msg.info{background:var(--accent-soft);color:var(--ink)}
+.msg.warn{background:var(--warn-soft);color:var(--ink)}
+.foot{margin-top:18px;color:var(--ink-2);font-size:13px}
+
+/* ===== 로그인 후 화면 ===== */
+.app{max-width:1120px;margin:0 auto;padding-block:16px 48px;display:flex;flex-direction:column;gap:14px}
+.bar{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between}
+.bar h1{font-size:19px;font-weight:600;letter-spacing:-.01em}
+.who{color:var(--ink-2);font-size:14px}
+.who b{color:var(--ink);font-weight:600}
+.bar .actions{display:flex;gap:8px}
+.nav{display:flex;gap:2px;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:thin}
+.nav button{border:0;background:transparent;padding:11px 14px;color:var(--ink-2);font-weight:500;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;min-height:44px}
+.nav button[aria-current="page"]{color:var(--ink);border-bottom-color:var(--accent)}
+.nav .soon{font-family:var(--font-mono);font-size:11px;color:var(--ink-2);margin-left:6px;border:1px solid var(--line);border-radius:99px;padding:0 6px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px}
+.card h2{font-size:17px;font-weight:600;margin-bottom:6px}
+.dl{display:grid;grid-template-columns:96px 1fr;gap:6px 12px;margin:10px 0 0}
+.dl dt{color:var(--ink-2);font-size:14px}
+.dl dd{margin:0}
+.stack{display:flex;flex-direction:column;gap:14px}
+.scroll{overflow-x:auto}
+table.t{width:100%;border-collapse:collapse;min-width:360px;margin-top:8px}
+.t th,.t td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--line)}
+.t th{font-size:14px;color:var(--ink-2);font-weight:500}
+.pill{display:inline-flex;align-items:center;gap:6px;border-radius:99px;padding:1px 10px;font-size:14px;font-weight:600;background:var(--ok-soft);color:var(--ok)}
+.pill.off{background:var(--surface-2);color:var(--ink-2)}
+.ver{color:var(--ink-2);font-size:12px;font-family:var(--font-mono)}
+.or{display:flex;align-items:center;gap:10px;color:var(--ink-2);font-size:13px;margin:20px 0 12px}
+.or::before,.or::after{content:'';flex:1;height:1px;background:var(--line)}
+.gbtn{display:flex;justify-content:center;min-height:44px}
+.gwrap .sub{margin-top:8px;font-size:13px}
+.clockcard{text-align:center;padding-block:20px}
+.bigtime{font-size:clamp(44px,15vw,64px);font-weight:500;letter-spacing:.02em;line-height:1.1;margin:6px 0 10px}
+.state-row{display:flex;align-items:center;justify-content:center;gap:10px}
+.state-text{font-weight:500}
+.lamp{width:10px;height:10px;border-radius:50%;background:var(--line);display:inline-block;flex:none}
+.lamp.on{background:var(--lamp);box-shadow:0 0 8px var(--lamp);animation:glow 2.4s ease-in-out infinite}
+.lamp.done{background:var(--ok)}
+@keyframes glow{0%,100%{box-shadow:0 0 4px var(--lamp)}50%{box-shadow:0 0 12px var(--lamp)}}
+.btn.clockbtn{min-height:68px;font-size:20px;width:100%}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+#main table.t{min-width:0}
+#main .t td,#main .t th{padding-inline:4px}
+#main .t .pill{font-size:13px;padding:1px 8px;margin:1px 0}
+.pill{white-space:nowrap}
+
+/* ===== 7-3 관리 화면 ===== */
+.pill.crit{background:var(--crit-soft);color:var(--crit)}
+.pill.info{background:var(--accent-soft);color:var(--ink)}
+.toolbar{display:flex;flex-wrap:wrap;gap:10px 12px;align-items:flex-end;justify-content:space-between}
+.toolbar .fld{margin-top:0;min-width:180px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+@media (max-width:520px){.row2{grid-template-columns:1fr}}
+.acts{display:flex;flex-wrap:wrap;gap:6px}
+#main .t td.acts-cell{min-width:128px}
+.formcard{border-color:var(--accent-line)}
+.formcard h2{margin-bottom:2px}
+.formbtns{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+.formbtns .btn{margin:0}
+.pinbox{border:2px dashed var(--lamp);background:var(--warn-soft);border-radius:10px;padding:14px;text-align:center;margin-top:12px}
+.pinbox .big{font-size:30px;letter-spacing:.24em;font-weight:500;margin:6px 0}
+.chk{display:flex;gap:10px;align-items:center;min-height:44px}
+.chk input{width:20px;height:20px;margin:0}
+.linkbtn{background:none;border:0;padding:0;color:var(--accent);text-decoration:underline;font-weight:500;min-height:0}
+@media (prefers-reduced-motion:reduce){.lamp.on{animation:none}}
+@media (prefers-reduced-motion:reduce){.auth-card{animation:none}}
+
+/* ===== 7-4: 월간 근무계획 ===== */
+.queue{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.queue li{display:flex;gap:10px;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);padding:6px 0}
+.palette{display:flex;flex-wrap:wrap;gap:6px}
+.brushbtn[aria-pressed=true]{outline:3px solid var(--accent);outline-offset:1px;background:var(--accent-soft)}
+.plan-scroll{max-height:70vh;overflow:auto;border:1px solid var(--line);border-radius:9px;margin-top:8px}
+.plangrid{border-collapse:separate;border-spacing:0;font-size:14px}
+.plangrid th,.plangrid td{border-bottom:1px solid var(--line);border-right:1px solid var(--line);padding:0;text-align:center;background:var(--surface)}
+.plangrid thead th{position:sticky;top:0;z-index:2;background:var(--surface-2);color:var(--ink-2);font-weight:500;min-width:40px}
+.plangrid .who-col{position:sticky;left:0;z-index:1;text-align:left;min-width:96px;max-width:132px;padding:4px 8px;background:var(--surface-2)}
+.plangrid thead .who-col{z-index:3}
+.plangrid .tot-col{min-width:104px;padding:4px 8px;font-size:13px;white-space:nowrap}
+.plangrid td.na{color:var(--ink-2);opacity:.5;min-width:40px}
+.colhead,.rowhead{background:none;border:0;padding:4px 2px;display:flex;flex-direction:column;align-items:center;width:100%;min-height:40px;justify-content:center;font-weight:500;color:inherit}
+.rowhead{align-items:flex-start;padding-inline:0}
+.dow{display:block;font-size:11px;color:var(--ink-2);font-weight:400}
+.plangrid th.we .colhead{color:var(--crit)}
+.plangrid th.tdy{box-shadow:inset 0 -3px 0 var(--accent)}
+.cell{display:block;width:100%;min-width:40px;min-height:44px;border:0;border-radius:0;background:transparent;font-family:var(--font-mono);font-weight:600;font-size:14px;padding:0}
+.cell.t-WORK{background:var(--accent-soft);color:var(--accent)}
+.cell.t-LEAVE{background:var(--warn-soft);color:var(--warn)}
+.cell.t-OFF{background:var(--surface-2);color:var(--ink-2)}
+.cell.t-X{background:var(--crit-soft);color:var(--crit)}
+.cell.empty{color:var(--ink-2);opacity:.6}
+.cell.dirty{box-shadow:inset 0 0 0 3px var(--lamp)}
+.cell:disabled{cursor:default}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:10px}
+.lg{display:inline-flex;align-items:center;gap:4px;font-size:14px}
+.lg-code{display:inline-block;width:auto;min-width:28px;min-height:0;padding:1px 6px;border-radius:6px;text-align:center}
+@media (prefers-reduced-motion: no-preference){.cell{transition:background-color .12s}}
+</style>
+</head>
+<body>
+<noscript><p style="padding:24px">이 앱은 JavaScript가 필요합니다. 브라우저 설정에서 JavaScript를 켜 주세요.</p></noscript>
+<div role="note" style="background:#F8EBD2;color:#A9650A;border-bottom:1px solid #A9650A;padding:6px 16px;font:600 13px/1.4 system-ui,sans-serif">DEV 시험용 — 실제 직원 정보를 넣지 마세요</div>
+<div id="root"></div>
+<div id="live" class="sr" aria-live="polite"></div>
+
+<script>
+'use strict';
+/* =====================================================================
+ * AZMT 근태 통합 시스템 — 프런트엔드 (단계 7-3)
+ * 범위: 본인 출퇴근·내 기록(7-2) + 지점·직원·근무코드 관리(7-3) · 로그인(휴대폰+PIN / 구글 병행) · 첫 로그인 PIN 변경 · 구글 계정 연결·해제
+ * 서버: Code.gs v0.6 (text/plain POST, 본문 {action, token, params}, 응답 {ok, data | code, message})
+ * 이후 단계(7-4~7-6)는 아래 TABS 의 render 함수를 채워 넣는 방식으로 붙인다.
+ * ===================================================================== */
+
+/* ---------- 설정: 배포 시 이 값만 바꾼다 ---------- */
+const CONFIG = {
+  API_URL: 'https://script.google.com/macros/s/AKfycbx0eoQbVp2m2pSN05ISDCXnV_sTjO8GP-t68fM1wG3bUCOtx28yXEqrjPM9Olh2RqhZVg/exec',                        // 예) https://script.google.com/macros/s/AKfycb.../exec
+  REQUEST_TIMEOUT_MS: 20000,
+  STORAGE_KEY: 'azmt_att_session_v1',
+  VERSION: '7-6'
+};
+
+/* ---------- 공통 ---------- */
+class ApiError extends Error {
+  constructor(code, message, extra) {
+    super(message);
+    this.code = code;
+    if (extra) Object.assign(this, extra);
+  }
+}
+const ROLE_LABEL = { STAFF: '현장 인력', GM: '총지배인', HQ: '본사 담당자' };
+
+function apiConfigured() {
+  return typeof CONFIG.API_URL === 'string' && /^https:\/\/script\.google\.com\/macros\/s\/[^\s]+\/exec$/.test(CONFIG.API_URL);
+}
+
+/* 휴대폰: 서버(normalizePhone_)와 같은 규칙 — 숫자만, 10자리 '10…'이면 앞에 0 복원 */
+function normalizePhone(v) {
+  let d = String(v == null ? '' : v).replace(/\D/g, '');
+  if (d.length === 10 && d.indexOf('10') === 0) d = '0' + d;
+  return /^01[016789]\d{7,8}$/.test(d) ? d : '';
+}
+/* 약한 PIN: 서버(isWeakPin_)와 동일 규칙 */
+function isWeakPin(pin) {
+  if (/^(\d)\1+$/.test(pin)) return true;
+  if ('01234567890123456789'.indexOf(pin) >= 0 || '98765432109876543210'.indexOf(pin) >= 0) return true;
+  if (/^(\d{2})\1\1$/.test(pin) || /^(\d{3})\1$/.test(pin)) return true;
+  return false;
+}
+
+/* ---------- 세션 (토큰은 이 기기에만 저장, 만료 시각 지나면 폐기) ---------- */
+const Session = (function () {
+  let mem = null; // localStorage 를 쓸 수 없는 환경(사생활 보호 모드 등) 대비
+  function valid(s) {
+    return !!s && typeof s.token === 'string' && s.token.length >= 32 &&
+      Number.isFinite(s.expires_at) && !!s.user && typeof s.user === 'object';
+  }
+  function get() {
+    let s = mem;
+    if (!s) {
+      try { s = JSON.parse(localStorage.getItem(CONFIG.STORAGE_KEY) || 'null'); } catch (e) { s = null; }
+    }
+    if (!valid(s) || s.expires_at - 60000 <= Date.now()) { clear(); return null; }
+    mem = s;
+    return s;
+  }
+  function save(s) {
+    mem = { token: s.token, expires_at: s.expires_at, user: s.user };
+    try { localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(mem)); } catch (e) { /* 메모리 보관으로 계속 */ }
+  }
+  function updateUser(patch) {
+    const s = get();
+    if (!s) return;
+    s.user = Object.assign({}, s.user, patch);
+    save(s);
+  }
+  function clear() {
+    mem = null;
+    try { localStorage.removeItem(CONFIG.STORAGE_KEY); } catch (e) { /* 무시 */ }
+  }
+  return { get: get, save: save, updateUser: updateUser, clear: clear };
+})();
+
+/* ---------- API 클라이언트 ---------- */
+const Api = { onAuthLost: null };
+
+async function apiCall(action, params, opts) {
+  opts = opts || {};
+  const needAuth = opts.auth !== false;
+  if (!apiConfigured()) throw new ApiError('CONFIG', '서버 주소가 설정되지 않았습니다. 관리자에게 문의해 주세요.');
+  const sess = needAuth ? Session.get() : null;
+  if (needAuth && !sess) throw new ApiError('AUTH', '로그인이 필요합니다.');
+
+  const ctrl = new AbortController();
+  const timer = setTimeout(function () { ctrl.abort(); }, CONFIG.REQUEST_TIMEOUT_MS);
+  let resp, text;
+  try {
+    resp = await fetch(CONFIG.API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // preflight 방지(서버 규약)
+      body: JSON.stringify({ action: action, token: sess ? sess.token : undefined, params: params || {} }),
+      signal: ctrl.signal, cache: 'no-store', redirect: 'follow', credentials: 'omit'
+    });
+    text = await resp.text();
+  } catch (e) {
+    if (e && e.name === 'AbortError') {
+      throw new ApiError('TIMEOUT', '서버 응답이 늦어지고 있습니다. 잠시 후 다시 시도해 주세요.', { uncertain: true });
+    }
+    throw new ApiError('NETWORK', '서버에 연결하지 못했습니다. 인터넷 연결을 확인한 뒤 다시 시도해 주세요.', { uncertain: true });
+  } finally {
+    clearTimeout(timer);
+  }
+
+  if (!resp.ok) {
+    if (resp.status === 401 || resp.status === 403 || resp.status === 404) {
+      throw new ApiError('DEPLOY', '서버에 접근할 수 없습니다. 서버 주소와 배포 설정(액세스: 모든 사용자)을 확인해 주세요.');
+    }
+    throw new ApiError('SERVER', '서버 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
+  }
+  let data;
+  try { data = JSON.parse(text); } catch (e) {
+    throw new ApiError('BAD_RESPONSE', '서버 응답을 읽지 못했습니다. 서버 배포 설정(액세스: 모든 사용자)을 확인해 주세요.');
+  }
+  if (!data || typeof data.ok !== 'boolean') throw new ApiError('BAD_RESPONSE', '서버 응답 형식이 올바르지 않습니다.');
+  if (!data.ok) {
+    const err = new ApiError(String(data.code || 'SERVER'), String(data.message || '요청을 처리하지 못했습니다.'));
+    if (err.code === 'AUTH' && sess) {
+      Session.clear();
+      if (Api.onAuthLost) Api.onAuthLost(err.message);
+    }
+    throw err;
+  }
+  return data.data;
+}
+
+/* ---------- 구글 로그인 (선택 기능: 실패해도 휴대폰+PIN 로그인에는 영향 없음) ---------- */
+const Google = (function () {
+  let opts = null;     // { enabled, client_id }
+  let loading = null;  // 스크립트 로딩 Promise
+  let inited = false;
+  let handler = null;  // 구글 버튼에서 ID 토큰이 돌아왔을 때 호출할 함수(화면마다 교체)
+  function gsi() { return window.google && window.google.accounts && window.google.accounts.id ? window.google.accounts.id : null; }
+  async function options() {
+    if (opts) return opts;
+    if (!apiConfigured()) return { enabled: false };
+    try {
+      const r = await apiCall('getAuthOptions', {}, { auth: false });
+      const g = r && r.google;
+      opts = (g && g.enabled === true && /^[A-Za-z0-9._-]+\.apps\.googleusercontent\.com$/.test(String(g.client_id || '')))
+        ? { enabled: true, client_id: g.client_id } : { enabled: false };
+    } catch (e) {
+      return { enabled: false }; // 실패는 캐시하지 않고 다음 화면에서 다시 확인
+    }
+    return opts;
+  }
+  function load() {
+    if (gsi()) return Promise.resolve(true);
+    if (loading) return loading;
+    loading = new Promise(function (resolve) {
+      const s = document.createElement('script');
+      let timer = null;
+      const done = function (ok) {
+        clearTimeout(timer);
+        if (!ok) { loading = null; s.remove(); }
+        resolve(ok);
+      };
+      timer = setTimeout(function () { done(false); }, 8000);
+      s.src = 'https://accounts.google.com/gsi/client';
+      s.async = true; s.defer = true;
+      s.onload = function () { done(!!gsi()); };
+      s.onerror = function () { done(false); };
+      document.head.appendChild(s);
+    });
+    return loading;
+  }
+  /* 'ok' = 버튼 표시됨, 'off' = 구글 로그인 미사용, 'fail' = 구글 스크립트를 불러오지 못함 */
+  async function renderButton(container, text) {
+    const o = await options();
+    if (!o.enabled) return 'off';
+    const ok = await load();
+    if (!ok) return 'fail';
+    if (!container.isConnected) return 'off';
+    if (!inited) {
+      gsi().initialize({
+        client_id: o.client_id, auto_select: false, cancel_on_tap_outside: true,
+        callback: function (r) { if (handler && r && typeof r.credential === 'string') handler(r.credential); }
+      });
+      inited = true;
+    }
+    const w = Math.max(200, Math.min(400, Math.floor(container.clientWidth) || 280));
+    gsi().renderButton(container, { type: 'standard', theme: 'outline', size: 'large', text: text || 'signin_with', shape: 'rectangular', locale: 'ko', width: w });
+    return 'ok';
+  }
+  return { options: options, renderButton: renderButton, setHandler: function (fn) { handler = typeof fn === 'function' ? fn : null; } };
+})();
+
+/* ---------- DOM 도우미 (사용자·서버 데이터는 항상 textContent 로만 넣는다) ---------- */
+function h(tag, attrs) {
+  const el = document.createElement(tag);
+  if (attrs) {
+    Object.keys(attrs).forEach(function (k) {
+      const v = attrs[k];
+      if (v === false || v == null) return;
+      if (k === 'class') el.className = v;
+      else if (k === 'text') el.textContent = v;
+      else if (k.slice(0, 2) === 'on' && typeof v === 'function') el.addEventListener(k.slice(2), v);
+      else if (v === true) el.setAttribute(k, '');
+      else el.setAttribute(k, String(v));
+    });
+  }
+  for (let i = 2; i < arguments.length; i++) appendKids(el, arguments[i]);
+  return el;
+}
+function appendKids(el, c) {
+  if (c == null || c === false) return;
+  if (Array.isArray(c)) { c.forEach(function (x) { appendKids(el, x); }); return; }
+  el.appendChild(c instanceof Node ? c : document.createTextNode(String(c)));
+}
+const root = document.getElementById('root');
+function mount(node) {
+  Google.setHandler(null);
+  root.replaceChildren(node);
+  const f = node.querySelector('[data-autofocus]') || node.querySelector('h1');
+  if (f) { if (!f.matches('input,button')) f.setAttribute('tabindex', '-1'); try { f.focus({ preventScroll: true }); } catch (e) { /* 무시 */ } }
+}
+function announce(msg) { document.getElementById('live').textContent = msg; }
+function showMsg(el, text, kind) {
+  el.className = 'msg ' + (kind || 'bad');
+  el.textContent = text;
+  el.hidden = false;
+}
+function friendly(e) {
+  if (e instanceof ApiError) return e.message;
+  console.error(e);
+  return '알 수 없는 오류가 발생했습니다. 새로고침 후 다시 시도해 주세요.';
+}
+
+/* ---------- 세션 만료 타이머 ---------- */
+let expiryTimer = null;
+function stopExpiryTimer() { if (expiryTimer) { clearTimeout(expiryTimer); expiryTimer = null; } }
+function startExpiryTimer() {
+  stopExpiryTimer();
+  const s = Session.get();
+  if (!s) return;
+  const ms = Math.min(Math.max(s.expires_at - Date.now() - 30000, 1000), 2147000000);
+  expiryTimer = setTimeout(function () {
+    Session.clear();
+    showLogin('로그인 유지 시간이 지났습니다. 다시 로그인해 주세요.');
+  }, ms);
+}
+
+/* ---------- 비밀번호(PIN) 입력 공통 ---------- */
+function pinField(id, label, autocomplete, hint) {
+  const input = h('input', {
+    id: id, type: 'password', inputmode: 'numeric', pattern: '[0-9]*', maxlength: '6',
+    autocomplete: autocomplete, required: true, class: 'mono', 'aria-describedby': hint ? id + '-hint' : false
+  });
+  return { input: input, wrap: h('div', { class: 'fld' }, h('label', { for: id }, label), input, hint ? h('div', { class: 'hint', id: id + '-hint' }, hint) : null) };
+}
+function revealToggle(inputs) {
+  const b = h('button', {
+    type: 'button', class: 'btn small', 'aria-pressed': 'false', style: 'margin-top:10px',
+    onclick: function () {
+      const show = b.getAttribute('aria-pressed') !== 'true';
+      inputs.forEach(function (i) { i.type = show ? 'text' : 'password'; });
+      b.setAttribute('aria-pressed', String(show));
+      b.textContent = show ? 'PIN 숨기기' : 'PIN 보기';
+    }
+  }, 'PIN 보기');
+  return b;
+}
+
+/* ===================== 화면: 로그인 ===================== */
+function showLogin(notice) {
+  stopExpiryTimer();
+  const err = h('p', { id: 'login-err', role: 'alert', hidden: true });
+  const phone = h('input', {
+    id: 'phone', type: 'tel', inputmode: 'numeric', autocomplete: 'username', maxlength: '13',
+    placeholder: '01012345678', required: true, class: 'mono', 'data-autofocus': '1'
+  });
+  const pin = pinField('pin', 'PIN (숫자 6자리)', 'current-password');
+  const btn = h('button', { type: 'submit', class: 'btn primary block' }, '로그인');
+  let busy = false;
+
+  const form = h('form', {
+    novalidate: true,
+    onsubmit: async function (ev) {
+      ev.preventDefault();
+      if (busy) return;
+      err.hidden = true; phone.removeAttribute('aria-invalid'); pin.input.removeAttribute('aria-invalid');
+      const ph = normalizePhone(phone.value);
+      if (!ph) { phone.setAttribute('aria-invalid', 'true'); showMsg(err, '휴대폰 번호를 확인해 주세요. (예: 01012345678)'); phone.focus(); return; }
+      const pv = pin.input.value.trim();
+      if (!/^\d{6}$/.test(pv)) { pin.input.setAttribute('aria-invalid', 'true'); showMsg(err, 'PIN은 숫자 6자리입니다.'); pin.input.focus(); return; }
+      busy = true; btn.disabled = true; btn.textContent = '로그인 중…';
+      try {
+        const r = await apiCall('login', { phone: ph, pin: pv }, { auth: false });
+        if (!r || typeof r.token !== 'string' || !Number.isFinite(r.expires_at) || !r.user || !r.user.role) {
+          throw new ApiError('BAD_RESPONSE', '서버 응답 형식이 올바르지 않습니다.');
+        }
+        Session.save({ token: r.token, expires_at: r.expires_at, user: r.user });
+        pin.input.value = '';
+        route();
+      } catch (e) {
+        pin.input.value = '';
+        showMsg(err, friendly(e));
+        if (document.body.contains(pin.input)) pin.input.focus();
+      } finally {
+        busy = false; btn.disabled = false; btn.textContent = '로그인';
+      }
+    }
+  },
+    h('div', { class: 'fld' }, h('label', { for: 'phone' }, '휴대폰 번호'), phone),
+    pin.wrap, revealToggle([pin.input]), err, btn);
+
+  const gBtn = h('div', { class: 'gbtn', id: 'google-btn' });
+  const gNote = h('p', { class: 'sub', id: 'google-note' }, '구글 계정을 미리 연결해 둔 경우에만 사용할 수 있어요. 처음이라면 위에서 PIN으로 로그인한 뒤 연결해 주세요.');
+  const gWrap = h('div', { class: 'gwrap', hidden: true }, h('div', { class: 'or', 'aria-hidden': 'true' }, '또는'), gBtn, gNote);
+
+  const card = h('main', { class: 'auth-card' },
+    h('div', { class: 'brand' }, h('i'), 'AZMT'),
+    h('h1', null, 'AZMT 근태 통합 시스템'),
+    h('p', { class: 'sub' }, '휴대폰 번호와 PIN 6자리로 로그인합니다.'),
+    notice ? h('p', { class: 'msg warn', role: 'status' }, notice) : null,
+    !apiConfigured() ? h('p', { class: 'msg bad', role: 'alert' }, '서버 주소가 설정되지 않아 로그인할 수 없습니다. 관리자에게 문의해 주세요.') : null,
+    form,
+    gWrap,
+    h('p', { class: 'foot' }, 'PIN을 모르거나 잠긴 경우 소속 지점 총지배인에게 요청해 주세요. 휴대폰 번호는 이 기기에 저장하지 않습니다.'),
+    h('p', { class: 'ver' }, 'v' + CONFIG.VERSION));
+  if (!apiConfigured()) btn.disabled = true;
+  mount(h('div', { class: 'auth' }, card));
+
+  /* 구글 로그인: 서버가 켜져 있을 때만 버튼을 보여준다. 어떤 실패도 PIN 로그인을 막지 않는다. */
+  Google.setHandler(async function (credential) {
+    if (busy) return;
+    busy = true; btn.disabled = true; err.hidden = true;
+    announce('구글 로그인 중입니다.');
+    try {
+      const r = await apiCall('loginGoogle', { id_token: credential }, { auth: false });
+      if (!r || typeof r.token !== 'string' || !Number.isFinite(r.expires_at) || !r.user || !r.user.role) {
+        throw new ApiError('BAD_RESPONSE', '서버 응답 형식이 올바르지 않습니다.');
+      }
+      Session.save({ token: r.token, expires_at: r.expires_at, user: r.user });
+      pin.input.value = '';
+      route();
+    } catch (e) {
+      showMsg(err, friendly(e));
+    } finally {
+      busy = false; btn.disabled = !apiConfigured();
+    }
+  });
+  Google.options().then(function (o) {
+    if (!o.enabled || !gWrap.isConnected) return;
+    gWrap.hidden = false;
+    return Google.renderButton(gBtn, 'signin_with').then(function (st) {
+      if (st === 'fail' && gWrap.isConnected) {
+        gBtn.replaceChildren();
+        gNote.textContent = '구글 로그인을 불러오지 못했어요. 휴대폰 번호와 PIN으로 로그인해 주세요.';
+      }
+    });
+  }).catch(function (e) { console.error(e); });
+}
+
+/* ===================== 화면: PIN 변경 (강제/자발) ===================== */
+let flash = '';
+function showChangePin(forced) {
+  const err = h('p', { id: 'pin-err', role: 'alert', hidden: true });
+  const f1 = pinField('old-pin', forced ? '임시 PIN (받은 6자리)' : '현재 PIN', 'current-password');
+  const f2 = pinField('new-pin', '새 PIN (숫자 6자리)', 'new-password', '연속(123456)·반복(111111, 121212)·휴대폰 번호 뒤 6자리는 사용할 수 없어요.');
+  const f3 = pinField('new-pin2', '새 PIN 확인', 'new-password');
+  f1.input.setAttribute('data-autofocus', '1');
+  const btn = h('button', { type: 'submit', class: 'btn primary block' }, 'PIN 변경');
+  let busy = false;
+
+  const form = h('form', {
+    novalidate: true,
+    onsubmit: async function (ev) {
+      ev.preventDefault();
+      if (busy) return;
+      err.hidden = true;
+      [f1, f2, f3].forEach(function (f) { f.input.removeAttribute('aria-invalid'); });
+      const o = f1.input.value.trim(), n = f2.input.value.trim(), n2 = f3.input.value.trim();
+      const bad = function (f, m) { f.input.setAttribute('aria-invalid', 'true'); showMsg(err, m); f.input.focus(); };
+      if (!/^\d{6}$/.test(o)) return bad(f1, '현재 PIN은 숫자 6자리입니다.');
+      if (!/^\d{6}$/.test(n)) return bad(f2, '새 PIN은 숫자 6자리여야 해요.');
+      if (n === o) return bad(f2, '현재 PIN과 다른 PIN을 입력해 주세요.');
+      if (isWeakPin(n)) return bad(f2, '연속되거나 반복되는 숫자는 사용할 수 없어요.');
+      if (n !== n2) return bad(f3, '새 PIN 확인이 일치하지 않아요.');
+      busy = true; btn.disabled = true; btn.textContent = '변경 중…';
+      try {
+        await apiCall('changePin', { old_pin: o, new_pin: n });
+        Session.updateUser({ pin_must_change: false });
+        flash = 'PIN을 변경했어요. 다른 기기에서 로그인한 상태는 종료됩니다.';
+        route();
+      } catch (e) {
+        [f1, f2, f3].forEach(function (f) { f.input.value = ''; });
+        if (e instanceof ApiError && e.code === 'LOCKED') { Session.clear(); showLogin(e.message); return; }
+        if (e instanceof ApiError && e.code === 'AUTH') return; // onAuthLost 가 로그인 화면으로 이동시킴
+        let m = friendly(e);
+        if (e instanceof ApiError && e.uncertain) m += ' 변경이 이미 처리되었을 수 있으니, 안 되면 새 PIN으로 다시 로그인해 보세요.';
+        showMsg(err, m);
+        f1.input.focus();
+      } finally {
+        busy = false; btn.disabled = false; btn.textContent = 'PIN 변경';
+      }
+    }
+  }, f1.wrap, f2.wrap, f3.wrap, revealToggle([f1.input, f2.input, f3.input]), err, btn);
+
+  const card = h('main', { class: 'auth-card' },
+    h('div', { class: 'brand' }, h('i'), 'AZMT'),
+    h('h1', null, forced ? '새 PIN을 정해 주세요' : 'PIN 변경'),
+    h('p', { class: 'sub' }, forced ? '임시 PIN으로 로그인했어요. 본인만 아는 PIN으로 바꿔야 계속 사용할 수 있어요.' : '현재 PIN을 확인한 뒤 새 PIN으로 바꿉니다.'),
+    form,
+    forced ? h('button', { type: 'button', class: 'btn small', style: 'margin-top:12px', onclick: function () { doLogout(); } }, '로그아웃')
+      : h('button', { type: 'button', class: 'btn small', style: 'margin-top:12px', onclick: function () { route(); } }, '취소'));
+  mount(h('div', { class: 'auth' }, card));
+}
+
+/* ===================== 로그아웃 ===================== */
+async function doLogout() {
+  try { await apiCall('logout'); } catch (e) { /* 서버 응답과 무관하게 이 기기 세션은 지운다 */ }
+  Session.clear();
+  showLogin('로그아웃했어요.');
+}
+
+/* ===================== 로그인 후 공통 틀 ===================== */
+function placeholder(stage, title, lines) {
+  return function (host) {
+    host.append(h('section', { class: 'card' }, h('h2', null, title),
+      h('p', { class: 'msg info', style: 'margin-top:8px' }, '단계 ' + stage + '에서 연결됩니다.'),
+      lines ? h('p', { class: 'sub', style: 'margin-top:8px' }, lines) : null));
+  };
+}
+
+function accountCard(user) {
+  return h('section', { class: 'card' }, h('h2', null, '로그인 정보'),
+    h('dl', { class: 'dl' },
+      h('dt', null, '이름'), h('dd', null, user.name),
+      h('dt', null, '역할'), h('dd', null, ROLE_LABEL[user.role] || user.role),
+      h('dt', null, '소속'), h('dd', null, user.branch_name || user.branch_id || '-'),
+      h('dt', null, '로그인 방식'), h('dd', null, user.login_method === 'GOOGLE' ? '구글 계정' : '휴대폰 + PIN')));
+}
+
+/* 구글 계정 연결·해제 카드. 구글 로그인이 꺼져 있고 연결도 없으면 표시하지 않는다. */
+function googleCard(user) {
+  const body = h('div', null);
+  const card = h('section', { class: 'card', hidden: true, id: 'google-card' }, h('h2', null, '구글 계정으로 로그인'), body);
+
+  function showLinked() {
+    const msg = h('p', { role: 'alert', hidden: true });
+    const confirmRow = h('div', { hidden: true },
+      h('p', { class: 'msg warn' }, user.login_method === 'GOOGLE'
+        ? '연결을 해제하면 지금 로그인한 상태도 종료돼요. 이후에는 휴대폰 번호와 PIN으로 로그인해야 해요.'
+        : '연결을 해제하면 구글 버튼으로 로그인할 수 없어요. 휴대폰 번호와 PIN으로는 계속 로그인할 수 있어요.'));
+    let busy = false;
+    const doBtn = h('button', {
+      type: 'button', class: 'btn small', style: 'margin-top:10px',
+      onclick: async function () {
+        if (busy) return;
+        busy = true; doBtn.disabled = true; msg.hidden = true;
+        try {
+          await apiCall('unlinkGoogle', {});
+          if (user.login_method === 'GOOGLE') { Session.clear(); showLogin('구글 연결을 해제했어요. 휴대폰 번호와 PIN으로 로그인해 주세요.'); return; }
+          Session.updateUser({ google_linked: false, google_email: '' });
+          flash = '구글 계정 연결을 해제했어요.';
+          showShell();
+        } catch (e) {
+          if (handleCommonError(e)) return;
+          showMsg(msg, friendly(e));
+        } finally {
+          busy = false; doBtn.disabled = false;
+        }
+      }
+    }, '해제하기');
+    const askBtn = h('button', {
+      type: 'button', class: 'btn small', style: 'margin-top:10px',
+      onclick: function () { confirmRow.hidden = false; askBtn.hidden = true; doBtn.focus(); }
+    }, '연결 해제');
+    confirmRow.append(doBtn, h('button', { type: 'button', class: 'btn small', style: 'margin:10px 0 0 8px', onclick: function () { confirmRow.hidden = true; askBtn.hidden = false; askBtn.focus(); } }, '취소'));
+    body.replaceChildren(
+      h('p', null, '연결된 구글 계정: ', h('b', { class: 'mono' }, user.google_email || '-')),
+      h('p', { class: 'sub', style: 'margin-top:4px' }, '로그인 화면의 구글 버튼으로 PIN 없이 들어올 수 있어요.'),
+      askBtn, confirmRow, msg);
+  }
+
+  function showUnlinked() {
+    const msg = h('p', { role: 'alert', hidden: true });
+    const pinF = pinField('link-pin', '현재 PIN (본인 확인)', 'current-password');
+    const gBtn = h('div', { class: 'gbtn', style: 'margin-top:14px' });
+    const note = h('p', { class: 'sub', style: 'margin-top:8px' });
+    let busy = false;
+    body.replaceChildren(
+      h('p', { class: 'sub' }, '구글 계정을 연결하면 PIN 입력 없이 구글 버튼으로 로그인할 수 있어요. 연결하면 해당 구글 계정의 이메일 주소가 본인 확인용으로 저장돼요. PIN 로그인도 계속 사용할 수 있어요.'),
+      pinF.wrap, gBtn, note, msg);
+    Google.setHandler(async function (credential) {
+      if (busy) return;
+      msg.hidden = true; pinF.input.removeAttribute('aria-invalid');
+      const pv = pinF.input.value.trim();
+      if (!/^\d{6}$/.test(pv)) {
+        pinF.input.setAttribute('aria-invalid', 'true');
+        showMsg(msg, '먼저 위 칸에 현재 PIN 6자리를 입력한 뒤, 구글 버튼을 눌러 주세요.');
+        pinF.input.focus();
+        return;
+      }
+      busy = true;
+      announce('구글 계정을 연결하는 중입니다.');
+      try {
+        const r = await apiCall('linkGoogle', { id_token: credential, pin: pv });
+        Session.updateUser({ google_linked: true, google_email: (r && r.google_email) || '' });
+        flash = '구글 계정을 연결했어요. 다음부터 로그인 화면의 구글 버튼으로 들어올 수 있어요.';
+        showShell();
+      } catch (e) {
+        pinF.input.value = '';
+        if (e instanceof ApiError && e.code === 'LOCKED') { Session.clear(); showLogin(e.message); return; }
+        if (handleCommonError(e)) return;
+        showMsg(msg, friendly(e));
+      } finally {
+        busy = false;
+      }
+    });
+    Google.renderButton(gBtn, 'continue_with').then(function (st) {
+      if (st === 'fail' && card.isConnected) note.textContent = '구글 로그인을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.';
+    }).catch(function (e) { console.error(e); });
+  }
+
+  Google.options().then(function (o) {
+    if (!card.isConnected) return;
+    if (user.google_linked) { card.hidden = false; showLinked(); }
+    else if (o.enabled) { card.hidden = false; showUnlinked(); }
+  }).catch(function (e) { console.error(e); });
+  return card;
+}
+
+function renderHome(host, ctx) {
+  const stack = h('div', { class: 'stack' });
+  host.append(stack);
+  if (flash) { stack.append(h('p', { class: 'msg ok', role: 'status', style: 'margin-top:0' }, flash)); flash = ''; }
+  stack.append(accountCard(ctx.user));
+  stack.append(googleCard(ctx.user));
+  if (ctx.user.role === 'STAFF') {
+    stack.append(h('button', { type: 'button', class: 'btn primary block', style: 'margin-top:0', onclick: function () { ctx.go('clock'); } }, '출퇴근 하러 가기'));
+    return;
+  }
+  const body = h('div', null, h('p', { class: 'sub' }, '불러오는 중…'));
+  stack.append(h('section', { class: 'card' }, h('h2', null, '서버 연결 확인 · 지점 목록'), body));
+  const load = function () {
+    body.replaceChildren(h('p', { class: 'sub' }, '불러오는 중…'));
+    apiCall('listBranches').then(function (r) {
+      if (!ctx.isCurrent()) return;
+      if (!r || !Array.isArray(r.branches)) throw new ApiError('BAD_RESPONSE', '서버 응답 형식이 올바르지 않습니다.');
+      if (!r.branches.length) {
+        body.replaceChildren(h('p', { class: 'msg warn', style: 'margin-top:8px' }, ctx.user.role === 'HQ'
+          ? '등록된 지점이 없어요. 위쪽 메뉴의 \'지점\'에서 먼저 등록해 주세요.'
+          : '소속 지점 정보를 찾을 수 없어요. 본사에 문의해 주세요.'));
+        return;
+      }
+      body.replaceChildren(h('div', { class: 'scroll' }, h('table', { class: 't' },
+        h('thead', null, h('tr', null, h('th', null, '지점'), h('th', null, '허용 반경'), h('th', null, '상태'))),
+        h('tbody', null, r.branches.map(function (b) {
+          return h('tr', null, h('td', null, b.name), h('td', { class: 'mono' }, b.radius_m + 'm'),
+            h('td', null, h('span', { class: 'pill' + (b.status === 'ACTIVE' ? '' : ' off') }, b.status === 'ACTIVE' ? '운영' : '중지')));
+        })))));
+    }).catch(function (e) {
+      if (!ctx.isCurrent() || handleCommonError(e)) return;
+      body.replaceChildren(h('p', { class: 'msg bad', role: 'alert', style: 'margin-top:8px' }, friendly(e)),
+        h('button', { type: 'button', class: 'btn small', style: 'margin-top:10px', onclick: load }, '다시 시도'));
+    });
+  };
+  load();
+}
+
+/* ===================== 7-2: 출퇴근 · 내 기록 ===================== */
+/* 시각은 서버가 KST(+09:00)로 기록한 문자열을 그대로 읽는다. 기기 시간대와 무관하게 표시하기 위해 Date 의 지역 시각은 쓰지 않는다. */
+const DOW = ['일', '월', '화', '수', '목', '금', '토'];
+const pad2 = function (n) { return ('0' + n).slice(-2); };
+function kstParts(ms) {
+  const d = new Date(ms + 9 * 3600000);
+  return { y: d.getUTCFullYear(), m: d.getUTCMonth() + 1, d: d.getUTCDate(), hh: d.getUTCHours(), mm: d.getUTCMinutes() };
+}
+function kstTodayStr() { const p = kstParts(Date.now()); return p.y + '-' + pad2(p.m) + '-' + pad2(p.d); }
+function okDate(d) { return typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d); }
+function dowOf(dateStr) { return okDate(dateStr) ? DOW[new Date(dateStr + 'T00:00:00Z').getUTCDay()] : ''; }
+function fmtDateLabel(dateStr) { if (!okDate(dateStr)) return ''; return parseInt(dateStr.slice(5, 7), 10) + '월 ' + parseInt(dateStr.slice(8, 10), 10) + '일 (' + dowOf(dateStr) + ')'; }
+function fmtShortDate(dateStr) { if (!okDate(dateStr)) return '-'; return dateStr.slice(5, 7) + '/' + dateStr.slice(8, 10) + ' (' + dowOf(dateStr) + ')'; }
+function fmtHM(iso) { const m = /T(\d{2}:\d{2})/.exec(String(iso || '')); return m ? m[1] : '-'; }
+function fmtDur(min) {
+  if (min == null || !Number.isFinite(min) || min < 0) return '-';
+  const hh = Math.floor(min / 60), mm = min % 60;
+  return hh ? hh + '시간 ' + pad2(mm) + '분' : mm + '분';
+}
+function addMonthStr(ym, n) {
+  const d = new Date(Date.UTC(parseInt(ym.slice(0, 4), 10), parseInt(ym.slice(5, 7), 10) - 1 + n, 1));
+  return d.getUTCFullYear() + '-' + pad2(d.getUTCMonth() + 1);
+}
+function daysOfMonth(ym) {
+  const n = new Date(Date.UTC(parseInt(ym.slice(0, 4), 10), parseInt(ym.slice(5, 7), 10), 0)).getUTCDate();
+  const out = [];
+  for (let i = 1; i <= n; i++) out.push(ym + '-' + pad2(i));
+  return out;
+}
+const LEAVE_LABEL = { ANNUAL: '연차', SICK: '병가', OFFICIAL: '공가' };
+function daySnapLabel(day) {
+  const s = day && day.snapshot;
+  if (!s) return day && day.code ? day.code : '';
+  if (s.type === 'OFF') return '휴무';
+  if (s.type === 'LEAVE') return s.leave_kind === 'HALF' ? (s.leave_unit === 'AM' ? '오전 반차' : '오후 반차') : (LEAVE_LABEL[s.leave_kind] || '휴가');
+  if (s.type === 'WORK') return day.code + ' ' + (s.start || '') + '–' + (s.end || '');
+  return day.code || '';
+}
+const REASON_LABEL = { OUT_OF_RANGE: '위치 반경 밖', LOW_ACCURACY: 'GPS 정확도 낮음', NO_APPROVED_PLAN: '승인 전 계획' };
+
+/* 현재 위치 한 번 읽기. 실패는 안내 문구와 함께 ApiError 로 돌려준다. */
+function getPosition() {
+  return new Promise(function (resolve, reject) {
+    if (!window.isSecureContext && location.protocol !== 'https:' && location.hostname !== 'localhost') {
+      reject(new ApiError('GEO', '보안 연결(https)에서만 위치를 확인할 수 있어요. 안내받은 주소로 접속했는지 확인해 주세요.')); return;
+    }
+    if (!navigator.geolocation) {
+      reject(new ApiError('GEO', '이 브라우저는 위치 확인을 지원하지 않아요. 다른 브라우저로 접속해 주세요.')); return;
+    }
+    navigator.geolocation.getCurrentPosition(function (p) {
+      const c = p && p.coords;
+      if (!c || !Number.isFinite(c.latitude) || !Number.isFinite(c.longitude) || !Number.isFinite(c.accuracy)) {
+        reject(new ApiError('GEO', '위치 값을 읽지 못했어요. 잠시 후 다시 눌러 주세요.')); return;
+      }
+      resolve({ lat: c.latitude, lng: c.longitude, accuracy: c.accuracy });
+    }, function (err) {
+      const code = err && err.code;
+      if (code === 1) reject(new ApiError('GEO', '위치 권한이 꺼져 있어요. 브라우저의 사이트 설정에서 위치를 허용한 뒤 다시 눌러 주세요.'));
+      else if (code === 3) reject(new ApiError('GEO', '위치 확인이 오래 걸리고 있어요. 잠시 후 다시 눌러 주세요.'));
+      else reject(new ApiError('GEO', '현재 위치를 찾지 못했어요. 실내라면 창가 근처로 이동하거나 휴대폰의 위치(GPS)를 켠 뒤 다시 눌러 주세요.'));
+    }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+  });
+}
+
+function errBlock(e, retry) {
+  return h('div', null, h('p', { class: 'msg bad', role: 'alert', style: 'margin-top:0' }, friendly(e)),
+    h('button', { type: 'button', class: 'btn small', style: 'margin-top:10px', onclick: retry }, '다시 시도'));
+}
+
+/* 출퇴근 직후 안내. 위치 이탈·정확도는 '기록은 됐고 확인 대상' 이라는 톤으로, 직원에게 책임을 묻지 않는다. */
+function resultNotice(kind, r) {
+  const rec = (r && r.record) || {};
+  const isIn = kind === 'in';
+  const t = fmtHM(isIn ? rec.in_at : rec.out_at);
+  const flag = String((isIn ? rec.in_flag : rec.out_flag) || '');
+  const dist = isIn ? rec.in_dist_m : rec.out_dist_m;
+  const notes = [];
+  if (flag.indexOf('OUT_OF_RANGE') >= 0) notes.push('위치가 지점 허용 반경 밖으로 확인됐어요' + (Number.isFinite(dist) ? ' (약 ' + dist + 'm)' : '') + '.');
+  if (flag.indexOf('LOW_ACCURACY') >= 0) notes.push('GPS 정확도가 낮게 측정됐어요.');
+  if (isIn && rec.plan_state === 'UNAPPROVED') notes.push('이번 달 근무 계획이 아직 승인 전이에요.');
+  const base = t + ' ' + (isIn ? '출근' : '퇴근') + '을 기록했어요.';
+  return notes.length
+    ? { kind: 'warn', text: base + ' ' + notes.join(' ') + ' 기록은 정상 저장되었고, 총지배인이 확인합니다.' }
+    : { kind: 'ok', text: base };
+}
+
+function renderClock(host, ctx) {
+  const wrap = h('div', { class: 'stack' });
+  host.append(wrap);
+  let busy = false;
+  let notice = null;
+  let timer = null;
+  const stopTimer = function () { if (timer) { clearInterval(timer); timer = null; } };
+
+  function consentBlock() {
+    const box = h('section', { class: 'card' }, h('h2', null, '위치정보 수집·이용 동의'), h('p', { class: 'sub' }, '불러오는 중…'));
+    apiCall('getConsent').then(function (c) {
+      if (!ctx.isCurrent()) return;
+      if (!c || !Array.isArray(c.items) || !c.version) throw new ApiError('BAD_RESPONSE', '서버 응답 형식이 올바르지 않습니다.');
+      const err = h('p', { role: 'alert', hidden: true });
+      const chk = h('input', { type: 'checkbox', id: 'consent-ok', style: 'width:20px;height:20px;margin:0' });
+      const go = h('button', { type: 'button', class: 'btn primary block', disabled: true }, '동의하고 시작하기');
+      let cbusy = false;
+      chk.addEventListener('change', function () { go.disabled = !chk.checked; });
+      go.addEventListener('click', async function () {
+        if (cbusy || !chk.checked) return;
+        cbusy = true; go.disabled = true; err.hidden = true;
+        try {
+          await apiCall('recordConsent', { version: c.version, agree: true });
+          notice = { kind: 'ok', text: '동의가 기록되었어요. 이제 출퇴근을 기록할 수 있어요.' };
+          cbusy = false;
+          if (ctx.isCurrent()) load();
+        } catch (e) {
+          cbusy = false; go.disabled = !chk.checked;
+          if (handleCommonError(e)) return;
+          if (e instanceof ApiError && e.code === 'CONSENT_VERSION') { notice = { kind: 'warn', text: e.message }; if (ctx.isCurrent()) load(); return; }
+          showMsg(err, friendly(e));
+        }
+      });
+      box.replaceChildren(
+        h('h2', null, c.title || '위치정보 수집·이용 동의'),
+        h('p', { class: 'sub' }, '출퇴근을 앱으로 기록하려면 아래 내용에 동의가 필요해요.'),
+        h('dl', { class: 'dl', style: 'grid-template-columns:96px 1fr' },
+          c.items.map(function (it) { return [h('dt', null, it.head), h('dd', null, it.body)]; })),
+        h('label', { for: 'consent-ok', style: 'display:flex;gap:10px;align-items:center;margin-top:16px;min-height:44px' }, chk, '위 내용을 확인했고 동의합니다.'),
+        err, go);
+    }).catch(function (e) {
+      if (!ctx.isCurrent() || handleCommonError(e)) return;
+      box.replaceChildren(h('h2', null, '위치정보 수집·이용 동의'), errBlock(e, function () { load(); }));
+    });
+    return box;
+  }
+
+  async function act(kind, btn) {
+    if (busy) return;
+    busy = true; btn.disabled = true; btn.textContent = '위치 확인 중…';
+    announce('위치를 확인하고 있어요.');
+    try {
+      const g = await getPosition();
+      btn.textContent = kind === 'in' ? '출근 기록 중…' : '퇴근 기록 중…';
+      const r = await apiCall(kind === 'in' ? 'clockIn' : 'clockOut', g);
+      notice = resultNotice(kind, r);
+    } catch (e) {
+      if (handleCommonError(e)) { busy = false; return; }
+      notice = { kind: 'bad', text: friendly(e) + (e && e.uncertain ? ' 기록되었는지 아래 상태를 먼저 확인해 주세요.' : '') };
+    }
+    busy = false;
+    if (ctx.isCurrent()) load();
+  }
+
+  async function load() {
+    stopTimer();
+    let t;
+    try { t = await apiCall('getMyToday'); } catch (e) {
+      if (!ctx.isCurrent() || handleCommonError(e)) return;
+      wrap.replaceChildren(errBlock(e, load));
+      return;
+    }
+    if (!ctx.isCurrent()) return;
+    if (!t || typeof t !== 'object' || !t.today || !t.server_time) { wrap.replaceChildren(errBlock(new ApiError('BAD_RESPONSE', '서버 응답 형식이 올바르지 않습니다.'), load)); return; }
+    try { draw(t); } catch (e) {
+      console.error(e);
+      wrap.replaceChildren(errBlock(new ApiError('BAD_RESPONSE', '화면을 표시하지 못했어요. 잠시 후 다시 시도해 주세요.'), load));
+    }
+  }
+
+  function draw(t) {
+    const offset = Date.parse(t.server_time) - Date.now();
+    const nodes = [];
+    if (notice) { nodes.push(h('p', { class: 'msg ' + notice.kind, role: 'status', style: 'margin-top:0' }, notice.text)); announce(notice.text); notice = null; }
+
+    if (t.block_reason === 'CONSENT_REQUIRED') {
+      nodes.push(h('p', { class: 'sub' }, fmtDateLabel(t.today)));
+      nodes.push(consentBlock());
+      wrap.replaceChildren.apply(wrap, nodes);
+      return;
+    }
+
+    const open = t.open_record;
+    const working = !!(open && !open.stale && t.can_clock_out);
+    const rec = t.record;
+    const done = !!(rec && !rec.open);
+    const sched = t.schedule || {};
+    const snap = sched.day && sched.day.snapshot;
+
+    const clockEl = h('div', { class: 'bigtime mono', 'aria-hidden': 'true' });
+    const tick = function () { const p = kstParts(Date.now() + offset); clockEl.textContent = pad2(p.hh) + ':' + pad2(p.mm); };
+    tick();
+    const lampCls = working ? 'lamp on' : done ? 'lamp done' : 'lamp';
+    const stateText = h('div', { class: 'state-text' });
+    const paintState = function () {
+      if (working) {
+        const base = Date.parse(open.in_at);
+        const el = Number.isFinite(base) ? Math.max(0, Math.round((Date.now() + offset - base) / 60000)) : null;
+        stateText.textContent = (open.work_date !== t.today ? fmtShortDate(open.work_date) + ' ' : '') + fmtHM(open.in_at) + ' 출근 · 근무 중' + (el != null ? ' (' + fmtDur(el) + ' 경과)' : '');
+      } else if (done) {
+        stateText.textContent = fmtHM(rec.in_at) + ' 출근 · ' + fmtHM(rec.out_at) + ' 퇴근 (' + fmtDur(rec.work_min) + ')';
+      } else {
+        stateText.textContent = '오늘 출근 전이에요';
+      }
+    };
+    paintState();
+    timer = setInterval(function () {
+      if (!clockEl.isConnected) { stopTimer(); return; }
+      tick(); paintState();
+    }, 20000);
+
+    let schedLine = '오늘 근무 일정이 아직 확정되지 않았어요.';
+    if (sched.state === 'APPROVED') {
+      if (snap && snap.type === 'WORK') schedLine = '오늘 근무: ' + daySnapLabel(sched.day) + (snap.net_min != null ? ' · 실근무 ' + fmtDur(snap.net_min) : '');
+      else if (snap) schedLine = '오늘은 ' + daySnapLabel(sched.day) + '이에요.';
+      else schedLine = '오늘은 근무 계획이 없어요.';
+    }
+
+    nodes.push(h('section', { class: 'card clockcard' },
+      h('div', { class: 'sub' }, fmtDateLabel(t.today) + (t.branch ? ' · ' + t.branch.name : '')),
+      clockEl,
+      h('div', { class: 'state-row' }, h('span', { class: lampCls, 'aria-hidden': 'true' }), stateText),
+      h('p', { class: 'sub', style: 'margin-top:6px' }, schedLine)));
+
+    // 안내/차단 메시지
+    if (t.block_reason === 'BRANCH') nodes.push(h('p', { class: 'msg warn' }, '소속 지점이 운영 중이 아니라 출퇴근을 기록할 수 없어요. 총지배인에게 문의해 주세요.'));
+    if (open && open.stale) nodes.push(h('p', { class: 'msg warn' }, fmtShortDate(open.work_date) + ' 출근 기록이 아직 퇴근 처리되지 않았어요. 시간이 많이 지나 앱에서는 처리할 수 없으니 총지배인에게 정정을 요청해 주세요.'));
+    if (open && !open.stale && open.work_date !== t.today) nodes.push(h('p', { class: 'msg info' }, fmtShortDate(open.work_date) + ' 출근 기록이 아직 퇴근 전이에요. 먼저 퇴근을 기록해 주세요.'));
+    if (t.block_reason === 'NOT_SCHEDULED') {
+      nodes.push(h('p', { class: 'msg info' }, (snap && snap.type === 'OFF' ? '오늘은 휴무일이라 출근을 기록할 수 없어요.' : snap && snap.type === 'LEAVE' ? '오늘은 휴가로 등록되어 있어요.' : '오늘 근무 계획이 없어요.') + ' 근무가 필요했다면 총지배인에게 문의해 주세요.'));
+    }
+    if (sched.state === 'UNAPPROVED' && (t.can_clock_in || working)) nodes.push(h('p', { class: 'msg info' }, '이번 달 근무 계획이 아직 승인되지 않았어요. 출퇴근은 기록되며 총지배인이 확인합니다.'));
+
+    // 버튼
+    if (working || t.can_clock_in) {
+      const kind = working ? 'out' : 'in';
+      const btn = h('button', { type: 'button', class: 'btn primary clockbtn', id: 'clock-btn', 'data-autofocus': '1' }, working ? '퇴근하기' : '출근하기');
+      btn.addEventListener('click', function () { act(kind, btn); });
+      nodes.push(btn);
+      nodes.push(h('p', { class: 'sub', style: 'text-align:center' }, '버튼을 누르는 순간의 위치를 한 번만 확인해요. 기록 시각은 서버 시계 기준이에요.' + (t.branch ? ' (허용 반경 ' + t.branch.radius_m + 'm)' : '')));
+    }
+
+    // 동의 철회
+    if (t.consent_ok) {
+      const row = h('div', { hidden: true },
+        h('p', { class: 'msg warn' }, '철회하면 앱으로 출퇴근을 기록할 수 없고, 총지배인이 사유를 남기고 수기로 기록해요. 이미 기록된 내용은 보관 기간 동안 유지돼요.'));
+      let wbusy = false;
+      const yes = h('button', { type: 'button', class: 'btn small', style: 'margin-top:10px' }, '철회하기');
+      const ask = h('button', { type: 'button', class: 'btn small' }, '위치정보 동의 철회');
+      ask.addEventListener('click', function () { row.hidden = false; ask.hidden = true; yes.focus(); });
+      yes.addEventListener('click', async function () {
+        if (wbusy) return;
+        wbusy = true; yes.disabled = true;
+        try {
+          await apiCall('withdrawConsent');
+          notice = { kind: 'info', text: '위치정보 동의를 철회했어요.' };
+        } catch (e) {
+          if (handleCommonError(e)) { wbusy = false; return; }
+          notice = { kind: 'bad', text: friendly(e) };
+        }
+        wbusy = false;
+        if (ctx.isCurrent()) load();
+      });
+      row.append(yes, h('button', { type: 'button', class: 'btn small', style: 'margin:10px 0 0 8px', onclick: function () { row.hidden = true; ask.hidden = false; ask.focus(); } }, '취소'));
+      nodes.push(h('div', { style: 'margin-top:6px' }, ask, row));
+    }
+    wrap.replaceChildren.apply(wrap, nodes);
+    const f = wrap.querySelector('#clock-btn');
+    if (f) { try { f.focus({ preventScroll: true }); } catch (e) { /* 무시 */ } }
+  }
+
+  wrap.append(h('p', { class: 'sub' }, '불러오는 중…'));
+  load();
+}
+
+function statusPills(r, todayStr) {
+  const out = [];
+  if (r.open) out.push(h('span', { class: 'pill warn' }, r.work_date === todayStr ? '근무 중' : '퇴근 미기록'));
+  if (r.late === true) out.push(h('span', { class: 'pill warn' }, '지각'));
+  if (r.review_status === 'PENDING') out.push(h('span', { class: 'pill warn', title: (r.review_reasons || []).map(function (x) { return REASON_LABEL[x] || x; }).join(', ') }, '확인 대기'));
+  else if (r.review_status === 'CONFIRMED') out.push(h('span', { class: 'pill' }, '확인됨'));
+  else if (!r.open) out.push(h('span', { class: 'pill' }, '정상'));
+  return out;
+}
+
+function renderMine(host, ctx) {
+  const wrap = h('div', { class: 'stack' });
+  host.append(wrap);
+  const today = kstTodayStr();
+  const curYm = today.slice(0, 7);
+  let ym = curYm;
+  const body = h('div', null);
+  const label = h('b', { class: 'mono', 'aria-live': 'polite' });
+  const prev = h('button', { type: 'button', class: 'btn small', 'aria-label': '이전 달' }, '‹');
+  const next = h('button', { type: 'button', class: 'btn small', 'aria-label': '다음 달' }, '›');
+  prev.addEventListener('click', function () { ym = addMonthStr(ym, -1); load(); });
+  next.addEventListener('click', function () { ym = addMonthStr(ym, 1); load(); });
+  wrap.append(h('section', { class: 'card' },
+    h('div', { style: 'display:flex;align-items:center;justify-content:space-between;gap:8px' }, prev, label, next), body));
+  let seq = 0;
+
+  async function load() {
+    const my = ++seq;
+    label.textContent = ym.slice(0, 4) + '년 ' + parseInt(ym.slice(5, 7), 10) + '월';
+    prev.disabled = ym <= addMonthStr(curYm, -12);
+    next.disabled = ym >= addMonthStr(curYm, 2);
+    body.replaceChildren(h('p', { class: 'sub', style: 'margin-top:12px' }, '불러오는 중…'));
+    try {
+      const res = await Promise.all([apiCall('listMyAttendance', { ym: ym }), apiCall('getMySchedule', { ym: ym })]);
+      if (!ctx.isCurrent() || my !== seq) return;
+      const a = res[0], s = res[1];
+      if (!a || !Array.isArray(a.records) || !s || !Array.isArray(s.days)) throw new ApiError('BAD_RESPONSE', '서버 응답 형식이 올바르지 않습니다.');
+      draw(a.records, s);
+    } catch (e) {
+      if (!(e instanceof ApiError)) { console.error(e); e = new ApiError('BAD_RESPONSE', '화면을 표시하지 못했어요. 잠시 후 다시 시도해 주세요.'); }
+      if (!ctx.isCurrent() || my !== seq || handleCommonError(e)) return;
+      body.replaceChildren(errBlock(e, load));
+    }
+  }
+
+  function draw(records, sched) {
+    const recBy = {}; records.forEach(function (r) { recBy[r.work_date] = r; });
+    const dayBy = {}; sched.days.forEach(function (d) { dayBy[d.date] = d; });
+    const rows = [];
+    let workDays = 0, totalMin = 0;
+    daysOfMonth(ym).forEach(function (d) {
+      const r = recBy[d], day = dayBy[d];
+      if (!r && !day) return;
+      if (r && Number.isFinite(r.work_min)) { workDays++; totalMin += r.work_min; }
+      let state;
+      if (r) state = h('span', null, statusPills(r, today));
+      else if (day && day.snapshot && day.snapshot.type === 'WORK') state = h('span', { class: 'pill off' }, d < today ? '기록 없음' : d === today ? '오늘 예정' : '예정');
+      else state = h('span', { class: 'sub' }, '');
+      rows.push(h('tr', null,
+        h('td', { class: 'mono' }, fmtShortDate(d)),
+        h('td', null, day ? daySnapLabel(day) : (r && r.plan_state === 'EXCEPTION' ? '계획 외' : '')),
+        h('td', { class: 'mono' }, r ? fmtHM(r.in_at) + '–' + (r.out_at ? fmtHM(r.out_at) : '') : '',
+          r && Number.isFinite(r.work_min) ? h('div', { class: 'sub', style: 'font-family:var(--font-body);font-size:13px' }, fmtDur(r.work_min)) : null),
+        h('td', null, state)));
+    });
+    const note = sched.plan_status && sched.plan_status !== 'APPROVED'
+      ? h('p', { class: 'msg info' }, '이 달 근무 계획이 아직 승인 전이라 일정은 표시되지 않아요.') : null;
+    if (!rows.length) {
+      body.replaceChildren.apply(body, [note, h('p', { class: 'sub', style: 'margin-top:12px' }, ym === curYm ? '이번 달 표시할 근무 일정이나 기록이 아직 없어요.' : '이 달에는 표시할 근무 일정이나 기록이 없어요.')].filter(Boolean));
+      return;
+    }
+    body.replaceChildren.apply(body, [note,
+      h('p', { class: 'sub', style: 'margin-top:12px' }, '퇴근까지 기록된 날 ' + workDays + '일 · 합계 ' + fmtDur(totalMin)),
+      h('div', { class: 'scroll' }, h('table', { class: 't' },
+        h('thead', null, h('tr', null, ['날짜', '근무', '출근–퇴근', '상태'].map(function (x) { return h('th', null, x); }))),
+        h('tbody', null, rows)))].filter(Boolean));
+  }
+
+  load();
+}
+
+/* ===================== 7-3: 지점 · 직원 · 근무코드 관리 ===================== */
+/* ---- 공통 도우미 ---- */
+function cleanText(v) { return String(v == null ? '' : v).replace(/\s+/g, ' ').trim(); }
+/* 서버 sanitizeText_ 와 같은 규칙. 문제가 없으면 '' */
+function textProblem(s, label, min, max) {
+  if (s.length < min || s.length > max) return label + '은(는) ' + min + '~' + max + '자로 입력해 주세요.';
+  if (/[\u0000-\u001f\u007f]/.test(s) || /^[=+\-@]/.test(s)) return label + '에 사용할 수 없는 문자가 있어요.';
+  return '';
+}
+function fmtPhone(d) {
+  d = String(d || '');
+  if (/^\d{11}$/.test(d)) return d.replace(/(\d{3})(\d{4})(\d{4})/, '$1-$2-$3');
+  if (/^\d{10}$/.test(d)) return d.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3');
+  return d;
+}
+function copyText(t) {
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(t).then(function () { return true; }, function () { return false; });
+  } catch (e) { /* 아래에서 false */ }
+  return Promise.resolve(false);
+}
+function fieldBox(id, label, control, hint) {
+  return h('div', { class: 'fld' }, h('label', { for: id }, label), control, hint ? h('div', { class: 'hint', id: id + '-hint' }, hint) : null);
+}
+function textInput(id, attrs) {
+  return h('input', Object.assign({ id: id, type: 'text', autocomplete: 'off' }, attrs || {}));
+}
+function selectInput(id, options, value) {
+  const s = h('select', { id: id }, options.map(function (o) { return h('option', { value: o[0] }, o[1]); }));
+  if (value !== undefined) s.value = value;
+  return s;
+}
+function setInvalid(el, on) { if (el) { if (on) el.setAttribute('aria-invalid', 'true'); else el.removeAttribute('aria-invalid'); } }
+function wrapError(e) {
+  if (e instanceof ApiError) return e;
+  console.error(e);
+  return new ApiError('BAD_RESPONSE', '화면을 표시하지 못했어요. 잠시 후 다시 시도해 주세요.');
+}
+/* 되돌리기 어려운 동작용 인라인 확인. 첫 버튼을 누르면 확인 문구가 나타나고, 한 번 더 눌러야 실행된다. */
+function confirmAction(label, question, run) {
+  let busy = false;
+  const ask = h('button', { type: 'button', class: 'btn small' }, label);
+  const yes = h('button', { type: 'button', class: 'btn small primary' }, '확인');
+  const no = h('button', { type: 'button', class: 'btn small' }, '취소');
+  const panel = h('span', { class: 'acts', hidden: true }, h('span', { class: 'sub' }, question), yes, no);
+  ask.addEventListener('click', function () { ask.hidden = true; panel.hidden = false; yes.focus(); });
+  no.addEventListener('click', function () { panel.hidden = true; ask.hidden = false; ask.focus(); });
+  yes.addEventListener('click', async function () {
+    if (busy) return;
+    busy = true; yes.disabled = true; no.disabled = true;
+    try { await run(); } finally { busy = false; yes.disabled = false; no.disabled = false; panel.hidden = true; ask.hidden = false; }
+  });
+  return h('span', { class: 'acts' }, ask, panel);
+}
+
+/* 구글맵 좌표 붙여넣기 해석: "38.2, 128.5" · 구글맵 주소(@위도,경도 / !3d..!4d.. / q=위도,경도) */
+function checkGeo(lat, lng) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return { error: '위도·경도는 숫자로 입력해 주세요.' };
+  if (lat >= 33 && lat <= 39 && lng >= 124 && lng <= 132) return { lat: lat, lng: lng };
+  if (lng >= 33 && lng <= 39 && lat >= 124 && lat <= 132) return { error: '위도와 경도의 순서가 바뀐 것 같아요. 위도(33~39)가 앞, 경도(124~132)가 뒤예요.' };
+  return { error: '국내 좌표 범위를 벗어났어요. 위도 33~39, 경도 124~132 사이여야 해요.' };
+}
+function parseCoords(raw) {
+  const s = String(raw == null ? '' : raw).trim();
+  if (!s) return { error: '구글맵 좌표를 붙여 넣어 주세요. (예: 38.2070, 128.5918)' };
+  const N = '(-?\\d+(?:\\.\\d+)?)';
+  let m = new RegExp('@' + N + ',' + N).exec(s) || new RegExp('!3d' + N + '!4d' + N).exec(s) ||
+    new RegExp('[?&](?:q|ll|query)=' + N + '(?:,|%2C)\\s*' + N, 'i').exec(s);
+  if (!m) m = new RegExp('^' + N + '\\s*[,\\s]\\s*' + N + '$').exec(s);
+  if (!m) return { error: '좌표 형식을 읽지 못했어요. 구글맵에서 지점을 우클릭해 나오는 숫자 두 개(예: 38.2070, 128.5918)를 붙여 넣어 주세요.' };
+  return checkGeo(Number(m[1]), Number(m[2]));
+}
+const NUM_RE = /^-?\d+(\.\d+)?$/;
+
+/* ===================== 지점 관리 (본사) ===================== */
+function renderBranches(host, ctx) {
+  const wrap = h('div', { class: 'stack' });
+  host.append(wrap);
+  const noteHost = h('div');
+  const formHost = h('div');
+  const listHost = h('div', null, h('p', { class: 'sub' }, '불러오는 중…'));
+  const addBtn = h('button', { type: 'button', class: 'btn primary small', onclick: function () { openForm(null); } }, '지점 추가');
+  wrap.append(noteHost, formHost, h('section', { class: 'card' }, h('div', { class: 'toolbar' }, h('h2', null, '지점 관리'), addBtn), listHost));
+  let list = [];
+
+  function note(kind, text) {
+    noteHost.replaceChildren(h('p', { class: 'msg ' + kind, role: 'status', style: 'margin-top:0' }, text));
+    announce(text);
+  }
+
+  async function load() {
+    listHost.replaceChildren(h('p', { class: 'sub' }, '불러오는 중…'));
+    try {
+      const r = await apiCall('listBranches');
+      if (!ctx.isCurrent()) return;
+      if (!r || !Array.isArray(r.branches)) throw new ApiError('BAD_RESPONSE', '서버 응답 형식이 올바르지 않습니다.');
+      list = r.branches;
+      draw();
+    } catch (x) {
+      const e = wrapError(x);
+      if (!ctx.isCurrent() || handleCommonError(e)) return;
+      listHost.replaceChildren(errBlock(e, load));
+    }
+  }
+
+  function draw() {
+    if (!list.length) {
+      listHost.replaceChildren(h('p', { class: 'msg warn', style: 'margin-top:8px' }, '등록된 지점이 없어요. \'지점 추가\'로 첫 지점을 등록해 주세요.'));
+      return;
+    }
+    const rows = list.map(function (b) {
+      const on = b.status === 'ACTIVE';
+      return h('tr', null,
+        h('td', null, h('div', null, b.name), h('div', { class: 'sub mono' }, b.branch_id)),
+        h('td', { class: 'mono' }, Number(b.lat).toFixed(5) + ', ' + Number(b.lng).toFixed(5), h('div', { class: 'sub' }, '반경 ' + b.radius_m + 'm')),
+        h('td', null, h('span', { class: 'pill' + (on ? '' : ' off') }, on ? '운영' : '중지')),
+        h('td', { class: 'acts-cell' }, h('button', { type: 'button', class: 'btn small', 'aria-label': b.name + ' 수정', onclick: function () { openForm(b); } }, '수정')));
+    });
+    listHost.replaceChildren(h('div', { class: 'scroll' }, h('table', { class: 't' },
+      h('thead', null, h('tr', null, ['지점', '위치', '상태', ''].map(function (x) { return h('th', null, x); }))),
+      h('tbody', null, rows))));
+  }
+
+  function openForm(b) {
+    const editing = !!b;
+    const err = h('p', { role: 'alert', hidden: true });
+    const geoMsg = h('p', { role: 'status', hidden: true });
+    const name = textInput('bf-name', { maxlength: '40', required: true, 'data-autofocus': '1' });
+    const paste = textInput('bf-coords', { placeholder: '예) 38.2070, 128.5918' });
+    const lat = textInput('bf-lat', { inputmode: 'decimal', class: 'mono' });
+    const lng = textInput('bf-lng', { inputmode: 'decimal', class: 'mono' });
+    const radius = textInput('bf-radius', { inputmode: 'numeric', maxlength: '4', class: 'mono' });
+    const status = selectInput('bf-status', [['ACTIVE', '운영'], ['INACTIVE', '중지']], b ? b.status : 'ACTIVE');
+    name.value = b ? String(b.name) : '';
+    lat.value = b ? String(b.lat) : '';
+    lng.value = b ? String(b.lng) : '';
+    radius.value = b ? String(b.radius_m) : '100';
+    const mapLink = h('a', { target: '_blank', rel: 'noopener noreferrer', hidden: true, id: 'bf-maplink' }, '구글맵에서 위치 확인');
+    const syncLink = function () {
+      const ok = NUM_RE.test(lat.value.trim()) && NUM_RE.test(lng.value.trim());
+      mapLink.hidden = !ok;
+      if (ok) mapLink.href = 'https://www.google.com/maps?q=' + Number(lat.value) + ',' + Number(lng.value);
+    };
+    lat.addEventListener('input', syncLink); lng.addEventListener('input', syncLink);
+
+    const applyPaste = function () {
+      const r = parseCoords(paste.value);
+      if (r.error) { showMsg(geoMsg, r.error, 'bad'); return false; }
+      lat.value = String(r.lat); lng.value = String(r.lng); syncLink();
+      showMsg(geoMsg, '좌표를 입력했어요. 저장하기 전에 \'구글맵에서 위치 확인\'으로 맞는 위치인지 확인해 주세요.', 'info');
+      return true;
+    };
+    let gbusy = false;
+    const here = h('button', { type: 'button', class: 'btn small' }, '현재 위치로 지정');
+    here.addEventListener('click', async function () {
+      if (gbusy) return;
+      gbusy = true; here.disabled = true; here.textContent = '위치 확인 중…';
+      try {
+        const g = await getPosition();
+        const r = checkGeo(g.lat, g.lng);
+        if (r.error) { showMsg(geoMsg, '측정된 위치가 국내 범위를 벗어났어요. 지점에 직접 가서 다시 측정해 주세요.', 'bad'); }
+        else {
+          lat.value = String(Math.round(g.lat * 1e6) / 1e6); lng.value = String(Math.round(g.lng * 1e6) / 1e6); syncLink();
+          showMsg(geoMsg, '현재 위치를 입력했어요 (오차 약 ' + Math.round(g.accuracy) + 'm).' + (g.accuracy > 50 ? ' 오차가 커요. 실외에서 다시 측정하거나 구글맵 좌표를 쓰는 편이 정확해요.' : '') + ' 지점 건물 안에서 측정한 값이 맞는지 확인해 주세요.', g.accuracy > 50 ? 'warn' : 'info');
+        }
+      } catch (x) { showMsg(geoMsg, friendly(x), 'bad'); }
+      gbusy = false; here.disabled = false; here.textContent = '현재 위치로 지정';
+    });
+
+    let busy = false;
+    const save = h('button', { type: 'submit', class: 'btn primary' }, editing ? '저장' : '지점 등록');
+    const form = h('form', {
+      novalidate: true,
+      onsubmit: async function (ev) {
+        ev.preventDefault();
+        if (busy) return;
+        err.hidden = true;
+        [name, lat, lng, radius].forEach(function (el) { setInvalid(el, false); });
+        const bad = function (el, m) { setInvalid(el, true); showMsg(err, m); el.focus(); };
+        const nm = cleanText(name.value);
+        const np = textProblem(nm, '지점명', 1, 40);
+        if (np) return bad(name, np);
+        if (!lat.value.trim() && !lng.value.trim() && paste.value.trim()) { if (!applyPaste()) return bad(paste, geoMsg.textContent); }
+        if (!NUM_RE.test(lat.value.trim())) return bad(lat, '위도를 숫자로 입력해 주세요. (구글맵 좌표를 붙여 넣고 \'적용\'을 눌러도 돼요)');
+        if (!NUM_RE.test(lng.value.trim())) return bad(lng, '경도를 숫자로 입력해 주세요.');
+        const g = checkGeo(Number(lat.value), Number(lng.value));
+        if (g.error) return bad(lat, g.error);
+        const rv = radius.value.trim();
+        if (!/^\d+$/.test(rv) || Number(rv) < 20 || Number(rv) > 1000) return bad(radius, '허용 반경은 20~1000m 사이 정수여야 해요.');
+        let params;
+        if (editing) {
+          params = { branch_id: b.branch_id };
+          if (nm !== String(b.name)) params.name = nm;
+          if (g.lat !== Number(b.lat)) params.lat = g.lat;
+          if (g.lng !== Number(b.lng)) params.lng = g.lng;
+          if (Number(rv) !== Number(b.radius_m)) params.radius_m = Number(rv);
+          if (status.value !== b.status) params.status = status.value;
+          if (Object.keys(params).length === 1) return showMsg(err, '변경한 내용이 없어요.', 'info');
+        } else {
+          params = { name: nm, lat: g.lat, lng: g.lng, radius_m: Number(rv) };
+        }
+        busy = true; save.disabled = true; save.textContent = '저장 중…';
+        try {
+          await apiCall(editing ? 'updateBranch' : 'createBranch', params);
+          if (!ctx.isCurrent()) return;
+          formHost.replaceChildren();
+          note('ok', editing ? '지점 정보를 저장했어요.' : '지점을 등록했어요. 이제 이 지점에 직원을 등록할 수 있어요.');
+          load();
+        } catch (x) {
+          const e = wrapError(x);
+          if (handleCommonError(e)) return;
+          showMsg(err, e.message + (e.uncertain ? ' 처리되었을 수 있으니 아래 목록을 확인해 주세요.' : ''));
+          if (e.uncertain) load();
+        } finally {
+          busy = false; save.disabled = false; save.textContent = editing ? '저장' : '지점 등록';
+        }
+      }
+    },
+      fieldBox('bf-name', '지점명', name),
+      h('div', { class: 'fld' }, h('label', { for: 'bf-coords' }, '구글맵 좌표 붙여넣기'),
+        h('div', { class: 'row' }, paste, h('button', { type: 'button', class: 'btn small', style: 'flex:none', onclick: applyPaste }, '적용')),
+        h('div', { class: 'hint', id: 'bf-coords-hint' }, '구글맵에서 지점을 우클릭하면 맨 위에 나오는 좌표를 누르면 복사돼요. 구글맵 주소(URL)를 붙여 넣어도 돼요.')),
+      h('div', { class: 'formbtns', style: 'margin-top:10px' }, here, mapLink),
+      geoMsg,
+      h('div', { class: 'row2' }, fieldBox('bf-lat', '위도', lat), fieldBox('bf-lng', '경도', lng)),
+      fieldBox('bf-radius', '출퇴근 허용 반경 (m)', radius, '지점 위치에서 이 거리 안이면 정상으로 봐요. 20~1000m. 벗어나도 출퇴근은 기록되고 확인 대상으로 표시돼요.'),
+      editing ? fieldBox('bf-status', '상태', status, '재직 중인 직원이 있는 지점은 중지할 수 없어요.') : null,
+      err,
+      h('div', { class: 'formbtns' }, save, h('button', { type: 'button', class: 'btn', onclick: function () { formHost.replaceChildren(); } }, '취소')));
+    formHost.replaceChildren(h('section', { class: 'card formcard' }, h('h2', null, editing ? '지점 수정 · ' + b.name : '지점 추가'), form));
+    syncLink();
+    try { name.focus({ preventScroll: false }); } catch (e) { /* 무시 */ }
+  }
+
+  load();
+}
+
+/* ===================== 직원 관리 (총지배인·본사) ===================== */
+function realDate(s) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(s + 'T00:00:00Z');
+  return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+}
+function fmtStamp(iso) {
+  const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/.exec(String(iso || ''));
+  return m ? m[1] + ' ' + m[2] : '';
+}
+
+function renderStaff(host, ctx) {
+  const me = ctx.user;
+  const isHQ = me.role === 'HQ';
+  const wrap = h('div', { class: 'stack' });
+  host.append(wrap);
+  const noteHost = h('div');
+  const pinHost = h('div');
+  const formHost = h('div');
+  const listHost = h('div', null, h('p', { class: 'sub' }, '불러오는 중…'));
+  let branches = [];
+  let users = [];
+  let filter = isHQ ? '' : me.branch_id;
+  let openId = null;
+  let showResigned = false;
+  let loadSeq = 0;
+
+  const branchSel = selectInput('sf-branch', [['', '전체 지점']], '');
+  branchSel.addEventListener('change', function () { filter = branchSel.value; openId = null; formHost.replaceChildren(); load(); });
+  const resCk = h('input', { type: 'checkbox', id: 'sf-resigned' });
+  resCk.addEventListener('change', function () { showResigned = resCk.checked; draw(); });
+  const addBtn = h('button', { type: 'button', class: 'btn primary small', onclick: function () { openCreate(); } }, '직원 추가');
+  wrap.append(noteHost, pinHost, formHost, h('section', { class: 'card' },
+    h('div', { class: 'toolbar' },
+      h('h2', null, '직원 관리'),
+      h('div', { class: 'acts', style: 'align-items:end' },
+        isHQ ? h('div', { class: 'fld' }, h('label', { for: 'sf-branch' }, '지점'), branchSel) : h('span', { class: 'sub' }, '소속: ' + (me.branch_name || me.branch_id)),
+        addBtn)),
+    h('label', { class: 'chk sub', for: 'sf-resigned' }, resCk, '퇴직한 직원도 보기'),
+    listHost));
+
+  const bname = function (id) {
+    if (id === 'HQ') return 'AZMT 본사';
+    const b = branches.filter(function (x) { return x.branch_id === id; })[0];
+    return b ? String(b.name) : String(id || '-');
+  };
+  function note(kind, text) {
+    noteHost.replaceChildren(h('p', { class: 'msg ' + kind, role: 'status', style: 'margin-top:0' }, text));
+    announce(text);
+  }
+
+  async function load() {
+    const my = ++loadSeq;
+    listHost.replaceChildren(h('p', { class: 'sub' }, '불러오는 중…'));
+    try {
+      const reqs = [apiCall('listUsers', isHQ && filter ? { branch_id: filter } : {})];
+      if (isHQ) reqs.push(apiCall('listBranches'));
+      const res = await Promise.all(reqs);
+      if (!ctx.isCurrent() || my !== loadSeq) return;
+      if (!res[0] || !Array.isArray(res[0].users) || (isHQ && (!res[1] || !Array.isArray(res[1].branches)))) throw new ApiError('BAD_RESPONSE', '서버 응답 형식이 올바르지 않습니다.');
+      users = res[0].users;
+      branches = isHQ ? res[1].branches : [{ branch_id: me.branch_id, name: me.branch_name, status: 'ACTIVE' }];
+      if (isHQ) {
+        const keep = branchSel.value;
+        branchSel.replaceChildren.apply(branchSel, [h('option', { value: '' }, '전체 지점')].concat(branches.map(function (b) { return h('option', { value: b.branch_id }, String(b.name) + (b.status === 'ACTIVE' ? '' : ' (중지)')); })));
+        branchSel.value = filter || keep || '';
+      }
+      draw();
+    } catch (x) {
+      const e = wrapError(x);
+      if (!ctx.isCurrent() || my !== loadSeq || handleCommonError(e)) return;
+      listHost.replaceChildren(errBlock(e, load));
+    }
+  }
+
+  function pills(u) {
+    const out = [];
+    if (u.status !== 'ACTIVE') out.push(h('span', { class: 'pill off' }, '퇴직'));
+    if (u.role === 'GM') out.push(h('span', { class: 'pill info' }, '총지배인'));
+    if (u.role === 'HQ') out.push(h('span', { class: 'pill info' }, '본사'));
+    if (u.locked) out.push(h('span', { class: 'pill crit' }, '잠김'));
+    if (u.pin_must_change && u.status === 'ACTIVE') out.push(h('span', { class: 'pill warn' }, '임시 PIN 대기'));
+    if (u.status === 'ACTIVE' && u.role !== 'HQ' && !u.loc_consent_ok) out.push(h('span', { class: 'pill off' }, '위치 동의 전'));
+    return out;
+  }
+
+  function draw() {
+    const all = users.slice();
+    const visible = all.filter(function (u) { return showResigned || u.status === 'ACTIVE'; });
+    visible.sort(function (a, b) {
+      if ((a.status === 'ACTIVE') !== (b.status === 'ACTIVE')) return a.status === 'ACTIVE' ? -1 : 1;
+      if (a.branch_id !== b.branch_id) return String(a.branch_id).localeCompare(String(b.branch_id));
+      if (a.role !== b.role) return a.role === 'GM' ? -1 : b.role === 'GM' ? 1 : 0;
+      return String(a.name).localeCompare(String(b.name), 'ko');
+    });
+    if (!visible.length) {
+      listHost.replaceChildren(h('p', { class: 'msg warn', style: 'margin-top:8px' }, all.length
+        ? '재직 중인 직원이 없어요. \'퇴직한 직원도 보기\'를 켜면 퇴직한 직원이 보여요.'
+        : '등록된 직원이 없어요. \'직원 추가\'로 등록해 주세요.'));
+      return;
+    }
+    const active = all.filter(function (u) { return u.status === 'ACTIVE'; }).length;
+    const rows = [];
+    visible.forEach(function (u) {
+      const opened = openId === u.user_id;
+      const sub = [isHQ && !filter ? bname(u.branch_id) : '', u.hired_at && okDate(u.hired_at) ? '입사 ' + u.hired_at : ''].filter(Boolean).join(' · ');
+      const toggle = h('button', { type: 'button', class: 'btn small', 'aria-expanded': opened ? 'true' : 'false', 'aria-label': u.name + ' 관리' }, opened ? '닫기' : '관리');
+      toggle.addEventListener('click', function () { openId = opened ? null : u.user_id; draw(); });
+      rows.push(h('tr', null,
+        h('td', null, h('div', null, u.name), sub ? h('div', { class: 'sub' }, sub) : null),
+        h('td', null, pills(u)),
+        h('td', { class: 'acts-cell' }, toggle)));
+      if (opened) rows.push(h('tr', null, h('td', { colspan: '3', style: 'background:var(--surface-2)' }, detail(u))));
+    });
+    listHost.replaceChildren(
+      h('p', { class: 'sub', style: 'margin-top:8px' }, '재직 ' + active + '명' + (all.length - active ? ' · 퇴직 ' + (all.length - active) + '명' : '')),
+      h('div', { class: 'scroll' }, h('table', { class: 't' },
+        h('thead', null, h('tr', null, ['직원', '상태', ''].map(function (x) { return h('th', null, x); }))),
+        h('tbody', null, rows))));
+  }
+
+  function showPin(name, pin, notice) {
+    const msg = h('p', { class: 'sub', role: 'status' });
+    const cp = h('button', { type: 'button', class: 'btn small' }, '복사');
+    cp.addEventListener('click', async function () {
+      const okc = await copyText(pin);
+      msg.textContent = okc ? '복사했어요.' : '복사하지 못했어요. 화면의 숫자를 직접 전달해 주세요.';
+    });
+    pinHost.replaceChildren(h('section', { class: 'card formcard' }, h('h2', null, '임시 PIN · ' + name),
+      h('div', { class: 'pinbox' },
+        h('div', { class: 'sub' }, notice || '임시 PIN은 지금 한 번만 표시돼요.'),
+        h('div', { class: 'big mono', id: 'temp-pin' }, pin),
+        h('div', { class: 'sub' }, '이 화면을 벗어나면 다시 볼 수 없어요. 본인에게 직접 전달해 주세요. 첫 로그인 때 새 PIN으로 바꿔야 해요.')),
+      h('div', { class: 'formbtns' }, cp, h('button', { type: 'button', class: 'btn primary', onclick: function () { pinHost.replaceChildren(); } }, '전달했어요 (닫기)')), msg));
+    announce('임시 PIN을 발급했어요. 화면에서 확인해 주세요.');
+  }
+
+  /* 서버 호출 한 건 실행 → 성공 안내 + 목록 새로고침, 실패 시 서버 문구 표시 */
+  async function run(action, params, okText, after) {
+    try {
+      const r = await apiCall(action, params);
+      if (!ctx.isCurrent()) return;
+      if (after) after(r);
+      note('ok', okText);
+      load();
+    } catch (x) {
+      const e = wrapError(x);
+      if (handleCommonError(e)) return;
+      note('bad', e.message + (e.uncertain ? ' 처리되었을 수 있으니 목록에서 상태를 확인해 주세요.' : ''));
+      if (e.uncertain) load();
+    }
+  }
+
+  function detail(u) {
+    const canMg = isHQ || (me.role === 'GM' && u.role === 'STAFF' && u.branch_id === me.branch_id);
+    const isSelf = u.user_id === me.user_id;
+    const contactBox = h('div', { role: 'status' });
+    const dl = h('dl', { class: 'dl', style: 'grid-template-columns:110px 1fr' },
+      h('dt', null, '소속'), h('dd', null, bname(u.branch_id)),
+      h('dt', null, '역할'), h('dd', null, ROLE_LABEL[u.role] || u.role),
+      h('dt', null, '입사일'), h('dd', null, okDate(u.hired_at) ? u.hired_at : '미입력'),
+      u.resigned_at && okDate(u.resigned_at) ? [h('dt', null, '퇴직일'), h('dd', null, u.resigned_at)] : null,
+      h('dt', null, '최근 로그인'), h('dd', null, fmtStamp(u.last_login_at) || '아직 없음'),
+      h('dt', null, '위치정보 동의'), h('dd', null, u.role === 'HQ' ? '해당 없음' : u.loc_consent_ok ? '동의함' : '동의 전'),
+      h('dt', null, '구글 연결'), h('dd', null, u.google_linked ? '연결됨 (' + (u.google_email || '') + ')' : '없음'));
+
+    let cbusy = false;
+    const cbtn = h('button', { type: 'button', class: 'btn small' }, '연락처 보기');
+    cbtn.addEventListener('click', async function () {
+      if (cbusy) return;
+      cbusy = true; cbtn.disabled = true;
+      try {
+        const r = await apiCall('getUserContact', { user_id: u.user_id });
+        if (!ctx.isCurrent()) return;
+        const digits = String((r && r.phone) || '').replace(/\D/g, '');
+        if (!/^01\d{8,9}$/.test(digits)) throw new ApiError('BAD_RESPONSE', '연락처를 확인하지 못했어요. 등록된 번호를 점검해 주세요.');
+        const cp = h('button', { type: 'button', class: 'btn small' }, '복사');
+        const cm = h('span', { class: 'sub' });
+        cp.addEventListener('click', async function () { cm.textContent = (await copyText(digits)) ? '복사했어요.' : '복사하지 못했어요.'; });
+        contactBox.replaceChildren(h('div', { class: 'acts', style: 'margin-top:10px' },
+          h('b', { class: 'mono' }, fmtPhone(digits)),
+          h('a', { class: 'btn small', href: 'tel:' + digits, style: 'display:inline-flex;align-items:center;text-decoration:none' }, '전화 걸기'), cp, cm),
+          h('p', { class: 'sub' }, '연락처를 열람하면 기록이 남아요.'));
+      } catch (x) {
+        const e = wrapError(x);
+        if (!handleCommonError(e)) contactBox.replaceChildren(h('p', { class: 'msg bad', role: 'alert' }, e.message));
+      }
+      cbusy = false; cbtn.disabled = false;
+    });
+
+    const acts = [cbtn];
+    if (canMg) {
+      acts.push(h('button', { type: 'button', class: 'btn small', onclick: function () { openEdit(u); } }, '수정'));
+      if (u.locked) acts.push(h('button', { type: 'button', class: 'btn small', onclick: function () { run('unlockUser', { user_id: u.user_id }, u.name + '님의 잠금을 해제했어요.'); } }, '잠금 해제'));
+      if (!isSelf && u.status === 'ACTIVE') {
+        acts.push(confirmAction('PIN 초기화', '새 임시 PIN을 발급하고 로그인 상태를 종료해요.', function () {
+          return run('resetPin', { user_id: u.user_id }, u.name + '님의 PIN을 초기화했어요.', function (r) { if (r && r.temp_pin) showPin(u.name, String(r.temp_pin), r.notice); });
+        }));
+        acts.push(confirmAction('퇴직 처리', '로그인이 막히고 이후 월간 계획 대상에서 빠져요.', function () {
+          return run('updateUser', { user_id: u.user_id, status: 'INACTIVE' }, u.name + '님을 퇴직 처리했어요.');
+        }));
+      }
+      if (!isSelf && u.status !== 'ACTIVE') {
+        acts.push(confirmAction('복직', '재직 상태로 되돌리고 새 임시 PIN을 발급해요.', function () {
+          return run('updateUser', { user_id: u.user_id, status: 'ACTIVE' }, u.name + '님을 복직 처리했어요.', function (r) { if (r && r.temp_pin) showPin(u.name, String(r.temp_pin), r.notice); });
+        }));
+      }
+      if (!isSelf && u.google_linked) {
+        acts.push(confirmAction('구글 연결 해제', '이 직원의 구글 로그인이 즉시 막혀요. 휴대폰+PIN 로그인은 그대로예요.', function () {
+          return run('unlinkGoogle', { user_id: u.user_id }, u.name + '님의 구글 연결을 해제했어요.');
+        }));
+      }
+    }
+    return h('div', { style: 'padding:6px 4px 10px' }, dl, h('div', { class: 'acts', style: 'margin-top:12px' }, acts),
+      canMg ? null : h('p', { class: 'sub', style: 'margin-top:8px' }, '이 계정은 본사에서 관리해요.'), contactBox);
+  }
+
+  /* ---- 등록 · 수정 폼 ---- */
+  function activeBranches(includeId) {
+    return branches.filter(function (b) { return b.status === 'ACTIVE' || b.branch_id === includeId; });
+  }
+  function branchOptions(includeId) {
+    return activeBranches(includeId).map(function (b) { return [b.branch_id, String(b.name) + (b.status === 'ACTIVE' ? '' : ' (중지)')]; });
+  }
+
+  function openCreate() {
+    const err = h('p', { role: 'alert', hidden: true });
+    const name = textInput('sf-name', { maxlength: '30', required: true, 'data-autofocus': '1' });
+    const phone = textInput('sf-phone', { type: 'tel', inputmode: 'numeric', maxlength: '13', class: 'mono', placeholder: '01012345678' });
+    const hired = h('input', { id: 'sf-hired', type: 'date' });
+    const roleSel = isHQ ? selectInput('sf-role', [['STAFF', '현장 인력'], ['GM', '총지배인'], ['HQ', '본사 담당자']], 'STAFF') : null;
+    const opts = branchOptions();
+    const brSel = isHQ ? selectInput('sf-newbranch', opts.length ? opts : [['', '운영 중인 지점 없음']], filter && opts.some(function (o) { return o[0] === filter; }) ? filter : (opts[0] ? opts[0][0] : '')) : null;
+    const brBox = isHQ ? fieldBox('sf-newbranch', '소속 지점', brSel) : null;
+    if (isHQ) roleSel.addEventListener('change', function () { brBox.hidden = roleSel.value === 'HQ'; });
+    let busy = false;
+    const save = h('button', { type: 'submit', class: 'btn primary' }, '등록');
+    const form = h('form', {
+      novalidate: true,
+      onsubmit: async function (ev) {
+        ev.preventDefault();
+        if (busy) return;
+        err.hidden = true;
+        [name, phone, hired].forEach(function (el) { setInvalid(el, false); });
+        const bad = function (el, m) { setInvalid(el, true); showMsg(err, m); el.focus(); };
+        const nm = cleanText(name.value);
+        const np = textProblem(nm, '이름', 1, 30);
+        if (np) return bad(name, np);
+        const ph = normalizePhone(phone.value);
+        if (!ph) return bad(phone, '휴대폰 번호를 확인해 주세요. (예: 01012345678) 로그인 ID로 쓰이고 중복 등록은 안 돼요.');
+        const hd = hired.value.trim();
+        if (hd && !realDate(hd)) return bad(hired, '입사일 형식이 올바르지 않아요.');
+        const role = isHQ ? roleSel.value : 'STAFF';
+        const params = { name: nm, phone: ph, role: role };
+        if (role !== 'HQ') {
+          params.branch_id = isHQ ? brSel.value : me.branch_id;
+          if (!params.branch_id) return bad(isHQ ? brSel : name, '소속 지점을 선택해 주세요. 운영 중인 지점이 없으면 먼저 지점을 등록해 주세요.');
+        }
+        if (hd) params.hired_at = hd;
+        busy = true; save.disabled = true; save.textContent = '등록 중…';
+        try {
+          const r = await apiCall('createUser', params);
+          if (!ctx.isCurrent()) return;
+          formHost.replaceChildren();
+          if (r && r.temp_pin) showPin(nm, String(r.temp_pin), r.notice);
+          note('ok', nm + '님을 등록했어요. 아래 임시 PIN을 본인에게 전달해 주세요.');
+          load();
+        } catch (x) {
+          const e = wrapError(x);
+          if (handleCommonError(e)) return;
+          showMsg(err, e.message + (e.uncertain ? ' 등록되었을 수 있어요. 목록에 있으면 \'PIN 초기화\'로 임시 PIN을 다시 발급하세요.' : ''));
+          if (e.uncertain) load();
+        } finally {
+          busy = false; save.disabled = false; save.textContent = '등록';
+        }
+      }
+    },
+      fieldBox('sf-name', '이름', name),
+      fieldBox('sf-phone', '휴대폰 번호 (필수)', phone, '로그인 ID이자 비상 연락처예요. 등록하면 임시 PIN이 한 번만 표시돼요.'),
+      fieldBox('sf-hired', '입사일 (선택)', hired, '월간 계획 대상 기간 계산에 쓰여요. 비워 두면 기간 제한이 없어요.'),
+      isHQ ? fieldBox('sf-role', '역할', roleSel) : null, brBox, err,
+      h('div', { class: 'formbtns' }, save, h('button', { type: 'button', class: 'btn', onclick: function () { formHost.replaceChildren(); } }, '취소')));
+    formHost.replaceChildren(h('section', { class: 'card formcard' }, h('h2', null, '직원 추가' + (!isHQ ? ' · ' + (me.branch_name || '') : '')), form));
+    try { name.focus(); } catch (e) { /* 무시 */ }
+  }
+
+  function openEdit(u) {
+    const isSelf = u.user_id === me.user_id;
+    const err = h('p', { role: 'alert', hidden: true });
+    const name = textInput('sf-name', { maxlength: '30', required: true });
+    name.value = String(u.name);
+    const phone = textInput('sf-phone', { type: 'tel', inputmode: 'numeric', maxlength: '13', class: 'mono', placeholder: '바꿀 때만 입력' });
+    const hired = h('input', { id: 'sf-hired', type: 'date' });
+    hired.value = okDate(u.hired_at) ? u.hired_at : '';
+    const canRoleBranch = isHQ && u.role !== 'HQ' && !isSelf;
+    const roleSel = canRoleBranch ? selectInput('sf-role', [['STAFF', '현장 인력'], ['GM', '총지배인']], u.role) : null;
+    const brSel = canRoleBranch ? selectInput('sf-newbranch', branchOptions(u.branch_id), u.branch_id) : null;
+    let busy = false;
+    const save = h('button', { type: 'submit', class: 'btn primary' }, '저장');
+    const form = h('form', {
+      novalidate: true,
+      onsubmit: async function (ev) {
+        ev.preventDefault();
+        if (busy) return;
+        err.hidden = true;
+        [name, phone, hired].forEach(function (el) { setInvalid(el, false); });
+        const bad = function (el, m) { setInvalid(el, true); showMsg(err, m); el.focus(); };
+        const nm = cleanText(name.value);
+        const np = textProblem(nm, '이름', 1, 30);
+        if (np) return bad(name, np);
+        const params = { user_id: u.user_id };
+        if (nm !== String(u.name)) params.name = nm;
+        if (phone.value.trim()) {
+          const ph = normalizePhone(phone.value);
+          if (!ph) return bad(phone, '휴대폰 번호를 확인해 주세요. (예: 01012345678)');
+          params.phone = ph;
+        }
+        const hd = hired.value.trim();
+        if (hd && !realDate(hd)) return bad(hired, '입사일 형식이 올바르지 않아요.');
+        if (hd !== (okDate(u.hired_at) ? u.hired_at : '')) params.hired_at = hd;
+        let moved = false;
+        if (canRoleBranch) {
+          if (roleSel.value !== u.role) { params.role = roleSel.value; moved = true; }
+          if (brSel.value && brSel.value !== u.branch_id) { params.branch_id = brSel.value; moved = true; }
+        }
+        if (Object.keys(params).length === 1) return showMsg(err, '변경한 내용이 없어요.', 'info');
+        busy = true; save.disabled = true; save.textContent = '저장 중…';
+        try {
+          await apiCall('updateUser', params);
+          if (!ctx.isCurrent()) return;
+          formHost.replaceChildren();
+          note('ok', nm + '님 정보를 저장했어요.' + (moved ? ' 역할·지점이 바뀌어 해당 직원은 다시 로그인해야 해요.' : ''));
+          load();
+        } catch (x) {
+          const e = wrapError(x);
+          if (handleCommonError(e)) return;
+          showMsg(err, e.message + (e.uncertain ? ' 저장되었을 수 있으니 목록을 확인해 주세요.' : ''));
+          if (e.uncertain) load();
+        } finally {
+          busy = false; save.disabled = false; save.textContent = '저장';
+        }
+      }
+    },
+      fieldBox('sf-name', '이름', name),
+      fieldBox('sf-phone', '휴대폰 번호', phone, '비워 두면 그대로 유지돼요. 현재 번호는 \'연락처 보기\'로 확인할 수 있어요. 번호를 바꾸면 로그인 ID도 바뀌어요.'),
+      fieldBox('sf-hired', '입사일', hired, '월간 계획 대상 기간 계산에 쓰여요.'),
+      canRoleBranch ? [fieldBox('sf-role', '역할', roleSel), fieldBox('sf-newbranch', '소속 지점', brSel, '역할이나 지점을 바꾸면 이 직원의 로그인 상태가 종료돼요.')] : null,
+      err,
+      h('div', { class: 'formbtns' }, save, h('button', { type: 'button', class: 'btn', onclick: function () { formHost.replaceChildren(); } }, '취소')));
+    formHost.replaceChildren(h('section', { class: 'card formcard' }, h('h2', null, '직원 수정 · ' + u.name), form));
+    try { name.focus(); } catch (e) { /* 무시 */ }
+  }
+
+  load();
+}
+
+/* ===================== 근무코드 (본사: 공통 코드 · 지점별 조정 / 총지배인: 소속 지점 조정) ===================== */
+const TYPE_LABEL = { WORK: '근무', LEAVE: '휴가', OFF: '휴무' };
+const LEAVE_KIND_LABEL = { ANNUAL: '연차', HALF: '반차', SICK: '병가', OFFICIAL: '공가' };
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+function leaveText(c) {
+  if (c.leave_kind === 'HALF') return c.leave_unit === 'AM' ? '오전 반차' : c.leave_unit === 'PM' ? '오후 반차' : '반차';
+  return LEAVE_KIND_LABEL[c.leave_kind] || '휴가';
+}
+function hmToMin(s) { const a = String(s).split(':'); return parseInt(a[0], 10) * 60 + parseInt(a[1], 10); }
+function hoursText(min) { return min % 60 === 0 ? (min / 60) + '시간' : fmtDur(min); }
+function breakRulesText(rules) {
+  if (!Array.isArray(rules) || !rules.length) return '';
+  return rules.map(function (r) { return hoursText(r.gross_min_from) + ' 이상 ' + r.break_min + '분'; }).join(', ');
+}
+/* 입력 중인 출·퇴근 시각의 예상 근무시간. 최종 판단은 서버가 하며, 이 값은 안내용이다. */
+function shiftPreview(start, end, rules) {
+  if (!TIME_RE.test(start) || !TIME_RE.test(end)) return { text: '출근·퇴근 시각을 모두 입력해 주세요.', bad: false };
+  const s = hmToMin(start), e = hmToMin(end);
+  if (s === e) return { text: '출근과 퇴근 시각이 같을 수 없어요.', bad: true };
+  const crosses = e < s;
+  const gross = (crosses ? e + 1440 : e) - s;
+  if (gross < 60) return { text: '근무시간은 최소 1시간 이상이어야 해요.', bad: true };
+  const over = gross > 960 ? ' ※ 1회 근무는 보통 최대 16시간까지예요. 저장 시 서버가 한도를 확인해요.' : '';
+  let brk = 0;
+  (rules || []).slice().sort(function (a, b) { return a.gross_min_from - b.gross_min_from; }).forEach(function (r) { if (gross >= r.gross_min_from) brk = r.break_min; });
+  return { text: (crosses ? '다음 날 퇴근 · ' : '') + '출근~퇴근 ' + fmtDur(gross) + ' − 휴게 ' + brk + '분 = 실근무 ' + fmtDur(gross - brk) + ' (예상)' + over, bad: false };
+}
+
+function renderCodes(host, ctx) {
+  const me = ctx.user;
+  const isHQ = me.role === 'HQ';
+  const wrap = h('div', { class: 'stack' });
+  host.append(wrap);
+  const noteHost = h('div');
+  const formHost = h('div');
+  const infoHost = h('div');
+  const listHost = h('div', null, h('p', { class: 'sub' }, '불러오는 중…'));
+  let scope = isHQ ? '' : me.branch_id; // '' = 공통(본사 전용)
+  let branches = [];
+  let data = null;
+  let loadSeq = 0;
+  const isCommon = function () { return isHQ && scope === ''; };
+
+  const scopeSel = selectInput('cf-scope', [['', '공통 코드 (전 지점)']], '');
+  scopeSel.addEventListener('change', function () { scope = scopeSel.value; formHost.replaceChildren(); noteHost.replaceChildren(); load(); });
+  const addBtn = h('button', { type: 'button', class: 'btn primary small', onclick: function () { openCreate(); } }, '코드 추가');
+  wrap.append(noteHost, formHost, h('section', { class: 'card' },
+    h('div', { class: 'toolbar' }, h('h2', null, '근무코드'),
+      h('div', { class: 'acts', style: 'align-items:end' },
+        isHQ ? h('div', { class: 'fld' }, h('label', { for: 'cf-scope' }, '보기'), scopeSel) : h('span', { class: 'sub' }, '지점: ' + (me.branch_name || me.branch_id)),
+        isHQ ? addBtn : null)),
+    infoHost, listHost));
+
+  function note(kind, text) {
+    noteHost.replaceChildren(h('p', { class: 'msg ' + kind, role: 'status', style: 'margin-top:0' }, text));
+    announce(text);
+  }
+
+  async function load() {
+    const my = ++loadSeq;
+    listHost.replaceChildren(h('p', { class: 'sub' }, '불러오는 중…'));
+    addBtn.hidden = !isCommon();
+    try {
+      const reqs = [apiCall('listWorkCodes', isHQ && scope ? { branch_id: scope } : {})];
+      if (isHQ) reqs.push(apiCall('listBranches'));
+      const res = await Promise.all(reqs);
+      if (!ctx.isCurrent() || my !== loadSeq) return;
+      if (!res[0] || !Array.isArray(res[0].codes) || (isHQ && (!res[1] || !Array.isArray(res[1].branches)))) throw new ApiError('BAD_RESPONSE', '서버 응답 형식이 올바르지 않습니다.');
+      data = res[0];
+      if (isHQ) {
+        branches = res[1].branches;
+        scopeSel.replaceChildren.apply(scopeSel, [h('option', { value: '' }, '공통 코드 (전 지점)')].concat(branches.map(function (b) { return h('option', { value: b.branch_id }, String(b.name) + ' 지점 조정'); })));
+        scopeSel.value = scope;
+      }
+      draw();
+    } catch (x) {
+      const e = wrapError(x);
+      if (!ctx.isCurrent() || my !== loadSeq || handleCommonError(e)) return;
+      listHost.replaceChildren(errBlock(e, load));
+    }
+  }
+
+  function draw() {
+    const rules = data.break_rules || [];
+    const rt = breakRulesText(rules);
+    infoHost.replaceChildren(
+      isCommon()
+        ? h('p', { class: 'sub', style: 'margin-top:8px' }, '공통 코드는 모든 지점에 적용돼요. 지점마다 시간이 다르면 위에서 지점을 골라 조정해 주세요.')
+        : h('p', { class: 'sub', style: 'margin-top:8px' }, '공통 코드의 시간을 이 지점에 맞게 조정해요. 조정한 시간은 이 지점의 계획에만 적용되고, 이미 승인된 달은 승인 당시 시간이 그대로 유지돼요.'),
+      rt ? h('p', { class: 'sub' }, '휴게시간은 자동 계산돼요: 출근~퇴근 ' + rt + '.') : null);
+    if (!data.codes.length) {
+      listHost.replaceChildren(h('p', { class: 'msg warn', style: 'margin-top:8px' }, isCommon() ? '등록된 근무코드가 없어요. \'코드 추가\'로 등록해 주세요.' : '사용할 수 있는 근무코드가 없어요. 본사에 문의해 주세요.'));
+      return;
+    }
+    const rows = data.codes.map(function (c) { return h('tr', null,
+      h('td', null, h('b', { class: 'mono' }, c.code), h('div', { class: 'sub' }, c.name)),
+      h('td', null, contentOf(c)),
+      h('td', null, statusOf(c)),
+      h('td', { class: 'acts-cell' }, actionsOf(c, rules))); });
+    listHost.replaceChildren(h('div', { class: 'scroll' }, h('table', { class: 't' },
+      h('thead', null, h('tr', null, ['코드', '내용', '상태', ''].map(function (x) { return h('th', null, x); }))),
+      h('tbody', null, rows))));
+  }
+
+  function contentOf(c) {
+    if (c.type === 'WORK') {
+      if (c.error) return h('span', { class: 'sub' }, c.error);
+      const t = c.start + '–' + c.end + (c.crosses_midnight ? ' (익일)' : '');
+      return h('div', null, h('div', { class: 'mono' }, t),
+        h('div', { class: 'sub' }, '실근무 ' + fmtDur(c.net_min) + ' · 휴게 ' + c.break_min + '분'),
+        c.overridden ? h('div', null, h('span', { class: 'pill info' }, '지점 조정'), h('span', { class: 'sub' }, ' 공통 ' + c.common_start + '–' + c.common_end)) : null);
+    }
+    if (c.type === 'LEAVE') return h('span', null, leaveText(c));
+    return h('span', null, '휴무');
+  }
+  function statusOf(c) {
+    const out = [h('span', { class: 'pill off' }, TYPE_LABEL[c.type] || c.type)];
+    if (c.error) out.push(h('span', { class: 'pill crit' }, '설정 오류'));
+    else if (c.branch_disabled) out.push(h('span', { class: 'pill off' }, '이 지점 사용 안 함'));
+    else if (!c.active) out.push(h('span', { class: 'pill off' }, '중지'));
+    else out.push(h('span', { class: 'pill' }, '사용'));
+    return out;
+  }
+
+  async function runCall(action, params, okText, after) {
+    try {
+      const r = await apiCall(action, params);
+      if (!ctx.isCurrent()) return;
+      note('ok', okText + (after ? after(r) : ''));
+      load();
+    } catch (x) {
+      const e = wrapError(x);
+      if (handleCommonError(e)) return;
+      note('bad', e.message + (e.uncertain ? ' 처리되었을 수 있으니 목록에서 상태를 확인해 주세요.' : ''));
+      if (e.uncertain) load();
+    }
+  }
+  const ownTimeNote = function (r) { return r && r.branches_with_own_time > 0 ? ' 자체 시간을 쓰는 ' + r.branches_with_own_time + '개 지점은 영향을 받지 않아요.' : ''; };
+
+  function actionsOf(c, rules) {
+    const acts = [];
+    if (isCommon()) {
+      acts.push(h('button', { type: 'button', class: 'btn small', 'aria-label': c.code + ' 수정', onclick: function () { openEdit(c, rules); } }, '수정'));
+      if (c.active && c.code !== 'OFF') {
+        acts.push(confirmAction('사용 중지', '새 계획에서 이 코드를 쓸 수 없게 돼요. 이미 승인된 계획은 그대로예요.', function () {
+          return runCall('updateWorkCode', { code: c.code, active: false }, c.code + ' 코드를 중지했어요.');
+        }));
+      } else if (!c.active && !c.error) {
+        acts.push(h('button', { type: 'button', class: 'btn small', onclick: function () { runCall('updateWorkCode', { code: c.code, active: true }, c.code + ' 코드를 다시 사용해요.'); } }, '다시 사용'));
+      }
+      return h('div', { class: 'acts' }, acts);
+    }
+    if (c.type !== 'WORK') return h('span', { class: 'sub' }, '-');
+    if (!c.active && !c.branch_disabled) return h('span', { class: 'sub' }, '공통 코드가 중지 상태예요.');
+    if (c.error && !c.branch_disabled) return h('span', { class: 'sub' }, '본사에서 시간을 바로잡아야 해요.');
+    acts.push(h('button', { type: 'button', class: 'btn small', 'aria-label': c.code + ' 시간 조정', onclick: function () { openOverride(c, rules); } }, '시간 조정'));
+    if (c.overridden) {
+      acts.push(confirmAction('공통값으로', '이 지점의 조정 시간을 지우고 공통 시간(' + c.common_start + '–' + c.common_end + ')을 써요.', function () {
+        return runCall('clearBranchWorkCode', { branch_id: scope, code: c.code }, c.code + ' 코드를 공통 시간으로 되돌렸어요.');
+      }));
+    }
+    if (c.branch_disabled) {
+      acts.push(h('button', { type: 'button', class: 'btn small', onclick: function () { runCall('setBranchWorkCode', { branch_id: scope, code: c.code, active: true }, c.code + ' 코드를 이 지점에서 다시 사용해요.'); } }, '이 지점 사용'));
+    } else {
+      acts.push(confirmAction('이 지점 사용 안 함', '이 지점의 새 계획에서 ' + c.code + ' 코드를 쓸 수 없게 돼요.', function () {
+        return runCall('setBranchWorkCode', { branch_id: scope, code: c.code, active: false }, c.code + ' 코드를 이 지점에서 사용하지 않아요.');
+      }));
+    }
+    return h('div', { class: 'acts' }, acts);
+  }
+
+  /* ---- 시간 입력 묶음(출근·퇴근 + 예상 시간) ---- */
+  function timeFields(rules, start0, end0) {
+    const start = h('input', { id: 'cf-start', type: 'time' });
+    const end = h('input', { id: 'cf-end', type: 'time' });
+    start.value = start0 || ''; end.value = end0 || '';
+    const prev = h('p', { class: 'sub', id: 'cf-preview', role: 'status' });
+    const upd = function () { const p = shiftPreview(start.value, end.value, rules); prev.textContent = p.text; prev.style.color = p.bad ? 'var(--crit)' : ''; };
+    start.addEventListener('input', upd); end.addEventListener('input', upd);
+    upd();
+    const node = h('div', null, h('div', { class: 'row2' }, fieldBox('cf-start', '출근', start), fieldBox('cf-end', '퇴근', end)), prev,
+      h('p', { class: 'hint' }, '퇴근이 출근보다 이르면 다음 날 퇴근(야간 근무)으로 봐요.'));
+    return { start: start, end: end, node: node };
+  }
+  function leaveFields(kind0, unit0) {
+    const kind = selectInput('cf-kind', [['ANNUAL', '연차'], ['HALF', '반차'], ['SICK', '병가'], ['OFFICIAL', '공가']], kind0 || 'ANNUAL');
+    const unit = selectInput('cf-unit', [['FULL', '종일'], ['AM', '오전'], ['PM', '오후']], unit0 || 'FULL');
+    return { kind: kind, unit: unit, node: h('div', { class: 'row2' }, fieldBox('cf-kind', '휴가 종류', kind), fieldBox('cf-unit', '단위', unit, '반차는 오전·오후, 그 외는 종일')) };
+  }
+  const leaveProblem = function (kind, unit) {
+    if (kind === 'HALF' && unit === 'FULL') return '반차는 오전 또는 오후 단위로 정해 주세요.';
+    if (kind !== 'HALF' && unit !== 'FULL') return '반차가 아닌 휴가는 종일 단위예요.';
+    return '';
+  };
+
+  function formShell(title, form) {
+    formHost.replaceChildren(h('section', { class: 'card formcard' }, h('h2', null, title), form));
+  }
+  function bindSubmit(opts) {
+    let busy = false;
+    const save = h('button', { type: 'submit', class: 'btn primary' }, opts.label);
+    const err = h('p', { role: 'alert', hidden: true });
+    const form = h('form', {
+      novalidate: true,
+      onsubmit: async function (ev) {
+        ev.preventDefault();
+        if (busy) return;
+        err.hidden = true;
+        const r = opts.collect(function (el, m) { if (el) { setInvalid(el, true); el.focus(); } showMsg(err, m); });
+        if (!r) return;
+        busy = true; save.disabled = true; save.textContent = '저장 중…';
+        try {
+          const res = await apiCall(r.action, r.params);
+          if (!ctx.isCurrent()) return;
+          formHost.replaceChildren();
+          note('ok', r.okText + (r.after ? r.after(res) : ''));
+          load();
+        } catch (x) {
+          const e = wrapError(x);
+          if (handleCommonError(e)) return;
+          showMsg(err, e.message + (e.uncertain ? ' 처리되었을 수 있으니 목록을 확인해 주세요.' : ''));
+          if (e.uncertain) load();
+        } finally {
+          busy = false; save.disabled = false; save.textContent = opts.label;
+        }
+      }
+    }, opts.body, err, h('div', { class: 'formbtns' }, save, h('button', { type: 'button', class: 'btn', onclick: function () { formHost.replaceChildren(); } }, '취소')));
+    return form;
+  }
+
+  function openCreate() {
+    const rules = data ? data.break_rules : [];
+    const code = textInput('cf-code', { maxlength: '3', class: 'mono', placeholder: '예) A', required: true });
+    const name = textInput('cf-name', { maxlength: '20', required: true });
+    const type = selectInput('cf-type', [['WORK', '근무'], ['LEAVE', '휴가'], ['OFF', '휴무']], 'WORK');
+    code.addEventListener('input', function () { code.value = code.value.toUpperCase(); });
+    const tf = timeFields(rules, '09:00', '18:00');
+    const lf = leaveFields();
+    const workBox = h('div', null, tf.node), leaveBox = h('div', { hidden: true }, lf.node);
+    type.addEventListener('change', function () { workBox.hidden = type.value !== 'WORK'; leaveBox.hidden = type.value !== 'LEAVE'; });
+    const form = bindSubmit({
+      label: '코드 등록',
+      body: [fieldBox('cf-code', '코드', code, '영문 대문자로 시작하는 1~3자(영문·숫자). 등록 후 코드 글자는 바꿀 수 없어요.'), fieldBox('cf-name', '이름', name), fieldBox('cf-type', '종류', type), workBox, leaveBox],
+      collect: function (bad) {
+        [code, name, tf.start, tf.end].forEach(function (el) { setInvalid(el, false); });
+        const cd = code.value.trim().toUpperCase();
+        if (!/^[A-Z][A-Z0-9]{0,2}$/.test(cd)) return bad(code, '코드는 영문 대문자로 시작하는 1~3자(영문·숫자)로 입력해 주세요.'), null;
+        const nm = cleanText(name.value);
+        const np = textProblem(nm, '코드 이름', 1, 20);
+        if (np) return bad(name, np), null;
+        const params = { code: cd, name: nm, type: type.value };
+        if (type.value === 'WORK') {
+          if (!TIME_RE.test(tf.start.value) || !TIME_RE.test(tf.end.value)) return bad(tf.start, '출근·퇴근 시각을 입력해 주세요.'), null;
+          const p = shiftPreview(tf.start.value, tf.end.value, rules);
+          if (p.bad) return bad(tf.end, p.text), null;
+          params.start = tf.start.value; params.end = tf.end.value;
+        } else if (type.value === 'LEAVE') {
+          const lp = leaveProblem(lf.kind.value, lf.unit.value);
+          if (lp) return bad(lf.unit, lp), null;
+          params.leave_kind = lf.kind.value; params.leave_unit = lf.unit.value;
+        }
+        return { action: 'createWorkCode', params: params, okText: cd + ' 코드를 등록했어요.' };
+      }
+    });
+    formShell('코드 추가', form);
+    try { code.focus(); } catch (e) { /* 무시 */ }
+  }
+
+  function openEdit(c, rules) {
+    const name = textInput('cf-name', { maxlength: '20', required: true });
+    name.value = String(c.name);
+    const tf = c.type === 'WORK' ? timeFields(rules, c.common_start || c.start, c.common_end || c.end) : null;
+    const lf = c.type === 'LEAVE' ? leaveFields(c.leave_kind, c.leave_unit) : null;
+    const form = bindSubmit({
+      label: '저장',
+      body: [h('p', { class: 'sub', style: 'margin-top:8px' }, '코드 ' + c.code + ' · ' + (TYPE_LABEL[c.type] || c.type)), fieldBox('cf-name', '이름', name), tf ? tf.node : null, lf ? lf.node : null],
+      collect: function (bad) {
+        setInvalid(name, false);
+        const nm = cleanText(name.value);
+        const np = textProblem(nm, '코드 이름', 1, 20);
+        if (np) return bad(name, np), null;
+        const params = { code: c.code };
+        if (nm !== String(c.name)) params.name = nm;
+        let timeChanged = false;
+        if (tf) {
+          if (!TIME_RE.test(tf.start.value) || !TIME_RE.test(tf.end.value)) return bad(tf.start, '출근·퇴근 시각을 입력해 주세요.'), null;
+          const p = shiftPreview(tf.start.value, tf.end.value, rules);
+          if (p.bad) return bad(tf.end, p.text), null;
+          if (tf.start.value !== c.common_start || tf.end.value !== c.common_end) { params.start = tf.start.value; params.end = tf.end.value; timeChanged = true; }
+        }
+        if (lf) {
+          const lp = leaveProblem(lf.kind.value, lf.unit.value);
+          if (lp) return bad(lf.unit, lp), null;
+          if (lf.kind.value !== c.leave_kind || lf.unit.value !== c.leave_unit) { params.leave_kind = lf.kind.value; params.leave_unit = lf.unit.value; }
+        }
+        if (Object.keys(params).length === 1) return bad(null, '변경한 내용이 없어요.'), null;
+        return { action: 'updateWorkCode', params: params, okText: c.code + ' 코드를 저장했어요.' + (timeChanged ? ' 이미 승인된 계획은 승인 당시 시간이 유지돼요.' : ''), after: ownTimeNote };
+      }
+    });
+    formShell('코드 수정 · ' + c.code, form);
+    try { name.focus(); } catch (e) { /* 무시 */ }
+  }
+
+  function openOverride(c, rules) {
+    const tf = timeFields(rules, c.start, c.end);
+    const form = bindSubmit({
+      label: '시간 저장',
+      body: [h('p', { class: 'sub', style: 'margin-top:8px' }, '공통 시간: ' + c.common_start + '–' + c.common_end), tf.node],
+      collect: function (bad) {
+        if (!TIME_RE.test(tf.start.value) || !TIME_RE.test(tf.end.value)) return bad(tf.start, '출근·퇴근 시각을 입력해 주세요.'), null;
+        const p = shiftPreview(tf.start.value, tf.end.value, rules);
+        if (p.bad) return bad(tf.end, p.text), null;
+        if (tf.start.value === c.start && tf.end.value === c.end && c.overridden) return bad(null, '변경한 내용이 없어요.'), null;
+        return { action: 'setBranchWorkCode', params: { branch_id: scope, code: c.code, start: tf.start.value, end: tf.end.value }, okText: c.code + ' 코드의 이 지점 시간을 저장했어요. 이미 승인된 계획은 승인 당시 시간이 유지돼요.' };
+      }
+    });
+    formShell('시간 조정 · ' + c.code + ' ' + c.name, form);
+    try { tf.start.focus(); } catch (e) { /* 무시 */ }
+  }
+
+  load();
+}
+
+/* ===================== 7-4: 월간 근무계획 (순수 계산 도우미) ===================== */
+/* 화면 코드와 분리해 둔 계산들. 서버가 최종 판단하며, 여기서는 사용자가 헛걸음하지 않도록 미리 알려 주는 용도다. */
+const PLAN_STATUS_LABEL = { DRAFT: '작성 중', SUBMITTED: '본사 검토 중', APPROVED: '승인됨', REJECTED: '반려됨' };
+const PLAN_BATCH_MAX = 1500;   // 서버 setPlanDays 한도
+const PLAN_CHANGE_MAX = 200;   // 서버 requestPlanChange 한도
+const planKey = function (uid, date) { return uid + '|' + date; };
+
+/* 입력·제출은 당월부터 2개월 후까지만 (서버 assertPlanMonth_ 와 같은 규칙) */
+function planMonthEditable(ym, today) {
+  const cur = String(today).slice(0, 7);
+  return ym >= cur && ym <= addMonthStr(cur, 2);
+}
+function inWindow(u, date) {
+  return !!u && okDate(date) && okDate(u.window_start) && okDate(u.window_end) && date >= u.window_start && date <= u.window_end;
+}
+/* 재직 기간 안인데 코드가 비어 있는 칸 수 */
+function planMissingCount(users, dates, local) {
+  let n = 0;
+  users.forEach(function (u) {
+    dates.forEach(function (d) { if (inWindow(u, d) && !local[planKey(u.user_id, d)]) n++; });
+  });
+  return n;
+}
+/* 서버 상태(server)와 화면 상태(local)가 다른 칸의 키 목록 */
+function planDiffKeys(server, local) {
+  const seen = {};
+  const out = [];
+  Object.keys(server).concat(Object.keys(local)).forEach(function (k) {
+    if (seen[k]) return;
+    seen[k] = true;
+    if ((server[k] || '') !== (local[k] || '')) out.push(k);
+  });
+  out.sort();
+  return out;
+}
+function splitPlanKey(k) {
+  const i = k.indexOf('|');
+  return { user_id: k.slice(0, i), date: k.slice(i + 1) };
+}
+function chunkList(list, size) {
+  const out = [];
+  for (let i = 0; i < list.length; i += size) out.push(list.slice(i, i + size));
+  return out;
+}
+function minutesText(min) {
+  if (!min) return '0시간';
+  return min % 60 === 0 ? (min / 60) + '시간' : Math.floor(min / 60) + '시간 ' + (min % 60) + '분';
+}
+function codeCellClass(meta) {
+  if (!meta) return 't-X';
+  if (meta.type === 'WORK') return 't-WORK';
+  if (meta.type === 'LEAVE') return 't-LEAVE';
+  return 't-OFF';
+}
+function codeDetailText(c) {
+  if (!c) return '';
+  if (c.type === 'WORK') return c.error ? '시간 설정 오류' : c.start + '–' + c.end + (c.crosses_midnight ? ' (익일)' : '');
+  if (c.type === 'LEAVE') return leaveText(c);
+  return '휴무';
+}
+
+/* ===================== 7-4: 월간 근무계획 화면 ===================== */
+function renderPlan(host, ctx) {
+  const me = ctx.user;
+  const isHQ = me.role === 'HQ';
+  const today = kstTodayStr();
+  const curYm = today.slice(0, 7);
+  const minYm = addMonthStr(curYm, -12);
+  const maxYm = addMonthStr(curYm, 2);
+
+  let ym = addMonthStr(curYm, 1);          // 보통 다음 달 계획을 쓰므로 기본값
+  let branchId = isHQ ? '' : me.branch_id;
+  let branches = [];
+  let data = null;                          // getPlan 결과
+  let codeList = [];                        // 이 지점에 적용되는 근무코드
+  let codeMeta = {};
+  let server = {};                          // 서버에 저장된 칸: key → code
+  let snaps = {};                           // 승인 시 확정된 근무시간: key → snapshot
+  let local = {};                           // 화면에서 편집 중인 칸
+  let brush;                                // undefined=미선택, ''=지우기/원래대로
+  let mode = 'view';                        // view | edit | change
+  let loadSeq = 0, queueSeq = 0;
+  let busy = false;
+  let cellRefs = {};
+  let totalRefs = {};
+  let summaryEl = null, saveBtn = null, undoBtn = null, submitWrap = null, sendBtn = null, changeReason = null;
+
+  const wrap = h('div', { class: 'stack' });
+  host.append(wrap);
+  const noteHost = h('div');
+  const queueHost = h('div');
+  const headHost = h('section', { class: 'card' });
+  const actionHost = h('div');
+  const gridHost = h('div');
+  wrap.append(noteHost, queueHost, headHost, actionHost, gridHost);
+
+  function note(kind, text) {
+    noteHost.replaceChildren(h('p', { class: 'msg ' + kind, role: 'status', style: 'margin-top:0' }, text));
+    announce(text);
+  }
+  const planOf = function () { return data && data.plan ? data.plan : null; };
+  const usersOf = function () { return data && Array.isArray(data.users) ? data.users : []; };
+  const nameOf = function (uid) { const u = usersOf().find(function (x) { return x.user_id === uid; }); return u ? u.name : uid; };
+  const dirtyKeys = function () { return planDiffKeys(server, local); };
+  const dirtyCount = function () { return mode === 'view' ? 0 : dirtyKeys().length; };
+  const branchNameOf = function (id) { const b = branches.find(function (x) { return x.branch_id === id; }); return b ? String(b.name) : (id === me.branch_id ? (me.branch_name || id) : id); };
+
+  /* 저장하지 않은 변경이 있으면 다른 달·지점으로 옮기지 못하게 막는다 */
+  function guard() {
+    if (dirtyCount() > 0) {
+      note('warn', '저장하지 않은 변경이 ' + dirtyCount() + '칸 있어요. ' + (mode === 'change' ? '변경 요청을 보내거나 취소한 뒤' : '저장하거나 \'서버 상태로 되돌리기\'를 누른 뒤') + ' 이동해 주세요.');
+      return false;
+    }
+    return true;
+  }
+
+  /* ---------- 불러오기 ---------- */
+  async function load() {
+    if (!branchId) { data = null; mode = 'view'; draw(); return; }
+    const my = ++loadSeq;
+    gridHost.replaceChildren(h('p', { class: 'sub' }, '불러오는 중…'));
+    actionHost.replaceChildren();
+    try {
+      const res = await Promise.all([
+        apiCall('getPlan', { branch_id: branchId, ym: ym }),
+        apiCall('listWorkCodes', isHQ ? { branch_id: branchId } : {})
+      ]);
+      if (!ctx.isCurrent() || my !== loadSeq) return;
+      const d = res[0], c = res[1];
+      if (!d || !Array.isArray(d.users) || !Array.isArray(d.days) || !c || !Array.isArray(c.codes)) throw new ApiError('BAD_RESPONSE', '서버 응답 형식이 올바르지 않습니다.');
+      data = d;
+      codeList = c.codes;
+      codeMeta = {};
+      codeList.forEach(function (x) { codeMeta[String(x.code)] = x; });
+      server = {}; snaps = {};
+      d.days.forEach(function (x) {
+        if (!x || !x.user_id || !okDate(x.date) || !x.code) return;
+        const k = planKey(x.user_id, x.date);
+        server[k] = String(x.code);
+        if (x.snapshot) snaps[k] = x.snapshot;
+      });
+      local = Object.assign({}, server);
+      const pl = d.plan;
+      mode = planMonthEditable(ym, today) && (!pl || pl.status === 'DRAFT' || pl.status === 'REJECTED') ? 'edit' : 'view';
+      brush = undefined;
+      draw();
+    } catch (x) {
+      const e = wrapError(x);
+      if (!ctx.isCurrent() || my !== loadSeq || handleCommonError(e)) return;
+      gridHost.replaceChildren(errBlock(e, load));
+    }
+  }
+
+  async function loadQueue() {
+    if (!isHQ) return;
+    const my = ++queueSeq;
+    try {
+      const res = await Promise.all([apiCall('listPlans', { status: 'SUBMITTED' }), apiCall('listPlanChanges', { status: 'PENDING' })]);
+      if (!ctx.isCurrent() || my !== queueSeq) return;
+      if (!res[0] || !Array.isArray(res[0].plans) || !res[1] || !Array.isArray(res[1].requests)) throw new ApiError('BAD_RESPONSE', '서버 응답 형식이 올바르지 않습니다.');
+      drawQueue(res[0].plans, res[1].requests);
+    } catch (x) {
+      const e = wrapError(x);
+      if (!ctx.isCurrent() || my !== queueSeq || handleCommonError(e)) return;
+      queueHost.replaceChildren(h('section', { class: 'card' }, h('p', { class: 'msg bad', style: 'margin-top:0' }, '검토 대기 목록을 불러오지 못했어요. ' + e.message), h('button', { type: 'button', class: 'btn small', onclick: loadQueue }, '다시 시도')));
+    }
+  }
+  const reloadAll = function () { loadQueue(); return load(); };
+
+  function openTarget(bid, targetYm) {
+    if (!guard()) return;
+    branchId = bid; ym = targetYm;
+    if (branchSel) branchSel.value = bid;
+    noteHost.replaceChildren();
+    load();
+    try { headHost.scrollIntoView({ block: 'start' }); } catch (e) { /* 무시 */ }
+  }
+
+  function drawQueue(plans, reqs) {
+    if (!plans.length && !reqs.length) {
+      queueHost.replaceChildren(h('section', { class: 'card' }, h('h2', null, '검토 대기'), h('p', { class: 'sub' }, '검토를 기다리는 계획이나 변경 요청이 없어요.')));
+      return;
+    }
+    const rows = [];
+    plans.forEach(function (p) {
+      rows.push(h('li', null,
+        h('span', null, h('b', null, String(p.branch_name || branchNameOf(p.branch_id))), ' · ' + p.ym + ' 계획 제출', p.late ? h('span', { class: 'pill crit', style: 'margin-left:6px' }, '지연') : null),
+        h('button', { type: 'button', class: 'btn small', 'aria-label': String(p.branch_name || p.branch_id) + ' ' + p.ym + ' 계획 열기', onclick: function () { openTarget(p.branch_id, p.ym); } }, '열기')));
+    });
+    reqs.forEach(function (r) {
+      const n = Array.isArray(r.changes) ? r.changes.length : 0;
+      rows.push(h('li', null,
+        h('span', null, h('b', null, branchNameOf(r.branch_id)), ' · ' + r.ym + ' 변경 요청 ' + n + '건'),
+        h('button', { type: 'button', class: 'btn small', 'aria-label': branchNameOf(r.branch_id) + ' ' + r.ym + ' 변경 요청 열기', onclick: function () { openTarget(r.branch_id, r.ym); } }, '열기')));
+    });
+    queueHost.replaceChildren(h('section', { class: 'card' }, h('h2', null, '검토 대기 ' + (plans.length + reqs.length) + '건'), h('ul', { class: 'queue' }, rows)));
+  }
+
+  /* ---------- 머리글: 달·지점·상태 ---------- */
+  let branchSel = null;
+  if (isHQ) {
+    branchSel = selectInput('pl-branch', [['', '지점을 선택하세요']], '');
+    branchSel.addEventListener('change', function () {
+      if (!guard()) { branchSel.value = branchId; return; }
+      branchId = branchSel.value; noteHost.replaceChildren(); load();
+    });
+  }
+  const prevBtn = h('button', { type: 'button', class: 'btn small', 'aria-label': '이전 달' }, '‹');
+  const nextBtn = h('button', { type: 'button', class: 'btn small', 'aria-label': '다음 달' }, '›');
+  const monthLabel = h('b', { class: 'mono', 'aria-live': 'polite' });
+  const statusLine = h('div', { class: 'acts', style: 'align-items:center;margin-top:10px' });
+  prevBtn.addEventListener('click', function () { if (ym > minYm && guard()) { ym = addMonthStr(ym, -1); noteHost.replaceChildren(); load(); } });
+  nextBtn.addEventListener('click', function () { if (ym < maxYm && guard()) { ym = addMonthStr(ym, 1); noteHost.replaceChildren(); load(); } });
+  headHost.append(
+    h('div', { class: 'toolbar' }, h('h2', null, '월간 근무계획'),
+      isHQ ? h('div', { class: 'fld', style: 'margin-top:0' }, h('label', { for: 'pl-branch' }, '지점'), branchSel) : h('span', { class: 'sub' }, '지점: ' + (me.branch_name || me.branch_id))),
+    h('div', { style: 'display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px' }, prevBtn, monthLabel, nextBtn),
+    statusLine);
+
+  function drawHead() {
+    monthLabel.textContent = ym.slice(0, 4) + '년 ' + parseInt(ym.slice(5, 7), 10) + '월';
+    prevBtn.disabled = ym <= minYm;
+    nextBtn.disabled = ym >= maxYm;
+    const kids = [];
+    const pl = planOf();
+    if (!branchId) { statusLine.replaceChildren(h('span', { class: 'sub' }, '지점을 선택하면 계획을 볼 수 있어요.')); return; }
+    if (!pl) kids.push(h('span', { class: 'pill off' }, planMonthEditable(ym, today) ? '아직 입력 전' : '계획 없음'));
+    else {
+      kids.push(h('span', { class: 'pill ' + (pl.status === 'APPROVED' ? '' : pl.status === 'REJECTED' ? 'crit' : pl.status === 'SUBMITTED' ? 'info' : 'off') }, PLAN_STATUS_LABEL[pl.status] || String(pl.status)));
+      if (pl.late) kids.push(h('span', { class: 'pill crit' }, '지연 제출'));
+      if (pl.submitted_at && pl.status !== 'DRAFT') kids.push(h('span', { class: 'sub' }, '제출 ' + fmtStamp(pl.submitted_at)));
+      if (pl.status === 'APPROVED' && pl.approved_at) kids.push(h('span', { class: 'sub' }, '승인 ' + fmtStamp(pl.approved_at)));
+    }
+    if (data && data.deadline && okDate(data.deadline) && (!pl || pl.status === 'DRAFT' || pl.status === 'REJECTED')) {
+      const over = today > data.deadline;
+      kids.push(h('span', { class: over ? 'pill crit' : 'sub' }, over ? '제출 마감(' + data.deadline.slice(5) + ')이 지났어요' : '제출 마감 ' + data.deadline.slice(5)));
+    }
+    statusLine.replaceChildren.apply(statusLine, kids);
+  }
+
+  /* ---------- 칸 그리기 ---------- */
+  function cellEditable(uid, date) {
+    const u = usersOf().find(function (x) { return x.user_id === uid; });
+    if (!inWindow(u, date)) return false;
+    if (mode === 'edit') return true;
+    if (mode === 'change') return date >= today;
+    return false;
+  }
+  function infoOf(k) {
+    const code = local[k];
+    if (!code) return null;
+    if (snaps[k] && server[k] === code) return snaps[k];
+    return codeMeta[code] || null;
+  }
+  function refreshCell(k) {
+    const r = cellRefs[k];
+    if (!r) return;
+    const code = local[k] || '';
+    const meta = code ? (snaps[k] && server[k] === code ? snaps[k] : codeMeta[code]) : null;
+    r.btn.className = 'cell ' + (code ? codeCellClass(meta) : 'empty') + ((local[k] || '') !== (server[k] || '') ? ' dirty' : '');
+    r.btn.textContent = code || '·';
+    const base = nameOf(r.uid) + ' ' + fmtShortDate(r.date) + ' ';
+    r.btn.setAttribute('aria-label', base + (code ? code + (meta && meta.name ? ' ' + meta.name : '') + (meta ? ' ' + codeDetailText(meta) : ' (사용할 수 없는 코드)') : '비어 있음') + (r.btn.className.indexOf('dirty') >= 0 ? ', 변경됨' : ''));
+  }
+  function refreshTotals() {
+    usersOf().forEach(function (u) {
+      const t = totalRefs[u.user_id];
+      if (!t) return;
+      let days = 0, min = 0;
+      daysOfMonth(ym).forEach(function (d) {
+        const inf = infoOf(planKey(u.user_id, d));
+        if (inf && inf.type === 'WORK') { days++; min += Number(inf.net_min) || 0; }
+      });
+      t.textContent = days + '일 · ' + minutesText(min);
+    });
+  }
+  function missingNow() { return planMissingCount(usersOf(), daysOfMonth(ym), local); }
+  function updateSummary() {
+    const dirty = dirtyCount();
+    if (mode === 'edit' && summaryEl) {
+      const miss = missingNow();
+      summaryEl.textContent = (dirty ? '저장하지 않은 변경 ' + dirty + '칸 · ' : '') + '빈 칸 ' + miss + '칸';
+      if (saveBtn) saveBtn.disabled = busy || dirty === 0;
+      if (undoBtn) undoBtn.disabled = busy || dirty === 0;
+      if (submitWrap) {
+        const b = submitWrap.querySelector('button');
+        if (b) { b.disabled = busy || dirty > 0 || miss > 0 || usersOf().length === 0; b.title = dirty > 0 ? '먼저 저장해 주세요.' : miss > 0 ? '빈 칸을 모두 채워야 제출할 수 있어요.' : ''; }
+      }
+    } else if (mode === 'change' && summaryEl) {
+      summaryEl.textContent = '변경한 칸 ' + dirty + '칸 (최대 ' + PLAN_CHANGE_MAX + '칸)';
+      if (sendBtn) sendBtn.disabled = busy || dirty === 0 || dirty > PLAN_CHANGE_MAX;
+      if (undoBtn) undoBtn.disabled = busy;
+    }
+    refreshTotals();
+  }
+  function paint(uid, date) {
+    if (brush === undefined) { note('warn', '먼저 위에서 근무코드를 고른 뒤 칸을 눌러 주세요.'); return; }
+    if (!cellEditable(uid, date)) return;
+    const k = planKey(uid, date);
+    let want = brush;
+    if (want === '') { want = mode === 'change' ? (server[k] || '') : ''; }
+    if (want) local[k] = want; else delete local[k];
+    refreshCell(k);
+    updateSummary();
+  }
+  /* 이름·날짜를 누르면 선택한 코드로 '빈 칸'만 채운다 (이미 입력한 칸은 건드리지 않는다) */
+  function fillEmpty(pairs) {
+    if (brush === undefined || brush === '') { note('warn', '채우려면 먼저 위에서 근무코드를 고르세요. (빈 칸만 채우고 이미 입력한 칸은 그대로 둬요)'); return; }
+    let n = 0;
+    pairs.forEach(function (p) {
+      const k = planKey(p.uid, p.date);
+      if (!cellEditable(p.uid, p.date) || local[k]) return;
+      local[k] = brush; refreshCell(k); n++;
+    });
+    note(n ? 'ok' : 'info', n ? '빈 칸 ' + n + '곳을 ' + brush + '로 채웠어요. 저장해야 반영돼요.' : '채울 빈 칸이 없어요.');
+    updateSummary();
+  }
+
+  function buildGrid() {
+    const users = usersOf();
+    cellRefs = {}; totalRefs = {};
+    if (!users.length) {
+      return h('p', { class: 'msg warn', style: 'margin-top:8px' }, '이 달에 계획 대상 직원이 없어요. \'직원\' 탭에서 직원을 등록하거나 입사일·퇴직일을 확인해 주세요.');
+    }
+    const dates = daysOfMonth(ym);
+    const fillable = mode === 'edit' || mode === 'change';
+    const head = h('tr', null, h('th', { class: 'who-col', scope: 'col' }, '직원'),
+      dates.map(function (d) {
+        const w = dowOf(d);
+        const inner = [h('span', null, String(parseInt(d.slice(8), 10))), h('span', { class: 'dow' }, w)];
+        const cls = (w === '토' || w === '일' ? 'we ' : '') + (d === today ? 'tdy' : '');
+        return h('th', { scope: 'col', class: cls.trim() },
+          fillable && mode === 'edit' ? h('button', { type: 'button', class: 'colhead', 'aria-label': fmtShortDate(d) + ' 빈 칸 채우기', onclick: function () { fillEmpty(users.map(function (u) { return { uid: u.user_id, date: d }; })); } }, inner) : h('span', { class: 'colhead' }, inner));
+      }),
+      h('th', { scope: 'col', class: 'tot-col' }, '근무 (참고)'));
+    const body = users.map(function (u) {
+      const nameNode = fillable && mode === 'edit'
+        ? h('button', { type: 'button', class: 'rowhead', 'aria-label': u.name + ' 빈 칸 채우기', onclick: function () { fillEmpty(dates.map(function (d) { return { uid: u.user_id, date: d }; })); } }, u.name)
+        : h('span', { class: 'rowhead' }, u.name);
+      const tot = h('td', { class: 'tot-col mono' });
+      totalRefs[u.user_id] = tot;
+      return h('tr', null,
+        h('th', { class: 'who-col', scope: 'row' }, nameNode, u.role === 'GM' ? h('span', { class: 'dow' }, '총지배인') : null),
+        dates.map(function (d) {
+          if (!inWindow(u, d)) return h('td', { class: 'na', title: '재직 기간 밖' }, '–');
+          const k = planKey(u.user_id, d);
+          const btn = h('button', { type: 'button', class: 'cell' });
+          cellRefs[k] = { btn: btn, uid: u.user_id, date: d };
+          if (cellEditable(u.user_id, d)) btn.addEventListener('click', function () { paint(u.user_id, d); });
+          else btn.disabled = true;
+          refreshCell(k);
+          return h('td', null, btn);
+        }), tot);
+    });
+    return h('div', { class: 'scroll plan-scroll' }, h('table', { class: 'plangrid' }, h('thead', null, head), h('tbody', null, body)));
+  }
+
+  function drawLegend() {
+    const list = codeList.filter(function (c) { return !c.error; });
+    if (!list.length) return null;
+    return h('div', { class: 'legend' }, list.map(function (c) {
+      return h('span', { class: 'lg' }, h('b', { class: 'cell lg-code ' + codeCellClass(c) }, String(c.code)), ' ' + c.name + ' ', h('span', { class: 'sub' }, codeDetailText(c) + (c.active ? '' : ' · 사용 중지')));
+    }));
+  }
+
+  /* ---------- 서버 호출 ---------- */
+  async function mutate(action, params, okText) {
+    if (busy) return;
+    busy = true; updateSummary();
+    try {
+      await apiCall(action, params);
+      if (!ctx.isCurrent()) return;
+      note('ok', okText);
+      busy = false;
+      await reloadAll();
+    } catch (x) {
+      const e = wrapError(x);
+      if (handleCommonError(e)) return;
+      note('bad', e.message + (e.uncertain ? ' 처리되었을 수 있으니 아래 상태를 확인해 주세요.' : ''));
+      busy = false;
+      reloadAll();
+    } finally {
+      busy = false;
+      if (ctx.isCurrent()) updateSummary();
+    }
+  }
+
+  async function save() {
+    if (busy) return;
+    const keys = dirtyKeys();
+    if (!keys.length) return;
+    const items = keys.map(function (k) { const p = splitPlanKey(k); return { user_id: p.user_id, date: p.date, code: local[k] || '' }; });
+    busy = true; updateSummary();
+    saveBtn.textContent = '저장 중…';
+    try {
+      const parts = chunkList(items, PLAN_BATCH_MAX);
+      for (let i = 0; i < parts.length; i++) await apiCall('setPlanDays', { branch_id: branchId, ym: ym, days: parts[i] });
+      if (!ctx.isCurrent()) return;
+      busy = false;
+      note('ok', items.length + '칸을 저장했어요. 모두 채웠다면 \'본사에 제출\'을 눌러 주세요.');
+      await load();
+    } catch (x) {
+      const e = wrapError(x);
+      if (handleCommonError(e)) return;
+      if (e.code === 'CONFLICT' || e.code === 'NOT_FOUND') {
+        note('bad', e.message + ' 최신 상태를 다시 불러왔어요. 화면의 변경은 반영되지 않았어요.');
+        busy = false; reloadAll(); return;
+      }
+      note('bad', e.message + (e.uncertain ? ' 저장되었는지 확인하려면 \'서버 상태로 되돌리기\'를 눌러 주세요. (눌러도 입력한 내용은 저장된 만큼만 남아요)' : ' 입력한 내용은 그대로 두었어요. 고친 뒤 다시 저장해 주세요.'));
+    } finally {
+      busy = false;
+      if (ctx.isCurrent()) { if (saveBtn) saveBtn.textContent = '저장'; updateSummary(); }
+    }
+  }
+
+  async function sendChange() {
+    if (busy) return;
+    const reason = cleanText(changeReason.value);
+    const rp = textProblem(reason, '변경 사유', 2, 200);
+    if (rp) { setInvalid(changeReason, true); changeReason.focus(); note('bad', rp); return; }
+    setInvalid(changeReason, false);
+    const keys = dirtyKeys().filter(function (k) { return !!local[k]; });
+    if (!keys.length) { note('bad', '변경할 칸이 없어요.'); return; }
+    if (keys.length > PLAN_CHANGE_MAX) { note('bad', '한 번에 최대 ' + PLAN_CHANGE_MAX + '칸까지 요청할 수 있어요.'); return; }
+    const changes = keys.map(function (k) { const p = splitPlanKey(k); return { user_id: p.user_id, date: p.date, code: local[k] }; });
+    await mutate('requestPlanChange', { plan_id: planOf().plan_id, reason: reason, changes: changes }, '변경 요청 ' + changes.length + '건을 본사에 보냈어요.');
+  }
+
+  /* ---------- 사유 입력 폼 (반려용) ---------- */
+  function reasonForm(id, label, btnLabel, onSend) {
+    let sending = false;
+    const ta = h('textarea', { id: id, rows: '2', maxlength: '200', style: 'width:100%' });
+    const err = h('p', { role: 'alert', hidden: true });
+    const send = h('button', { type: 'button', class: 'btn small primary' }, btnLabel);
+    send.addEventListener('click', async function () {
+      if (sending || busy) return;
+      const v = cleanText(ta.value);
+      const p = textProblem(v, label, 2, 200);
+      setInvalid(ta, !!p);
+      if (p) { showMsg(err, p); ta.focus(); return; }
+      err.hidden = true;
+      sending = true; send.disabled = true;
+      try { await onSend(v); } finally { sending = false; send.disabled = false; }
+    });
+    return h('div', { class: 'formcard card', style: 'margin-top:10px' }, fieldBox(id, label, ta), err, h('div', { class: 'formbtns' }, send));
+  }
+
+  /* ---------- 검토 중 변경 요청 카드 ---------- */
+  function pendingCard(rq) {
+    const rows = (Array.isArray(rq.changes) ? rq.changes : []).map(function (c) {
+      return h('tr', null, h('td', null, nameOf(c.user_id)), h('td', null, fmtShortDate(c.date)), h('td', { class: 'mono' }, (c.old_code || '없음') + ' → ' + c.new_code));
+    });
+    const canCancel = isHQ || rq.requested_by === me.user_id;
+    const acts = [];
+    if (canCancel) acts.push(confirmAction('요청 취소', '이 변경 요청을 취소해요. 계획은 그대로예요.', function () { return mutate('cancelPlanChange', { request_id: rq.request_id }, '변경 요청을 취소했어요.'); }));
+    let rejectHost = null;
+    if (isHQ) {
+      acts.push(confirmAction('변경 승인', '승인하면 바로 계획에 반영되고 근무시간이 확정돼요.', function () { return mutate('approvePlanChange', { request_id: rq.request_id }, '변경 요청을 승인했어요.'); }));
+      rejectHost = h('div');
+      acts.push(h('button', { type: 'button', class: 'btn small', onclick: function () {
+        if (rejectHost.firstChild) { rejectHost.replaceChildren(); return; }
+        rejectHost.append(reasonForm('pl-crej', '반려 사유', '변경 요청 반려', function (v) { return mutate('rejectPlanChange', { request_id: rq.request_id, note: v }, '변경 요청을 반려했어요.'); }));
+        const t = rejectHost.querySelector('textarea'); if (t) t.focus();
+      } }, '변경 반려'));
+    }
+    return h('section', { class: 'card formcard' }, h('h2', null, '검토 중인 변경 요청 ' + rows.length + '건'),
+      h('p', { class: 'sub' }, '요청자 ' + nameOf(rq.requested_by) + (rq.requested_at ? ' · ' + fmtStamp(rq.requested_at) : '')),
+      h('p', null, '사유: ' + rq.reason),
+      h('div', { class: 'scroll' }, h('table', { class: 't' }, h('thead', null, h('tr', null, ['직원', '날짜', '변경'].map(function (x) { return h('th', null, x); }))), h('tbody', null, rows))),
+      h('div', { class: 'acts', style: 'margin-top:10px' }, acts), rejectHost);
+  }
+
+  /* ---------- 상태별 작업 영역 ---------- */
+  function paletteNode() {
+    const mk = function (value, label, sub) {
+      const b = h('button', { type: 'button', class: 'btn small brushbtn', 'aria-pressed': 'false' }, h('b', { class: 'mono' }, label), sub ? h('span', { class: 'sub', style: 'margin-left:4px' }, sub) : null);
+      b.dataset.brush = value;
+      b.addEventListener('click', function () {
+        brush = value;
+        [].forEach.call(b.parentNode.children, function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+      });
+      return b;
+    };
+    const kids = codeList.filter(function (c) { return c.active && !c.error; }).map(function (c) { return mk(String(c.code), String(c.code), c.name); });
+    kids.push(mk('', mode === 'change' ? '원래대로' : '지우기', ''));
+    return h('div', { class: 'palette', role: 'group', 'aria-label': '근무코드 선택' }, kids);
+  }
+
+  function drawActions() {
+    const pl = planOf();
+    const kids = [];
+    summaryEl = saveBtn = undoBtn = submitWrap = sendBtn = changeReason = null;
+    if (!branchId) { actionHost.replaceChildren(); return; }
+
+    if (pl && pl.status === 'REJECTED' && pl.reject_reason) {
+      kids.push(h('p', { class: 'msg bad', style: 'margin-top:0' }, '반려 사유: ' + pl.reject_reason));
+    }
+
+    if (mode === 'edit') {
+      summaryEl = h('p', { class: 'sub', role: 'status', style: 'margin:0' });
+      saveBtn = h('button', { type: 'button', class: 'btn primary', onclick: save }, '저장');
+      undoBtn = h('button', { type: 'button', class: 'btn', onclick: function () { if (!busy) { note('info', '서버에 저장된 상태로 되돌렸어요.'); load(); } } }, '서버 상태로 되돌리기');
+      submitWrap = confirmAction('본사에 제출', '제출하면 본사가 승인하거나 반려할 때까지 수정할 수 없어요.', function () { return mutate('submitPlan', { branch_id: branchId, ym: ym }, ym + ' 계획을 본사에 제출했어요.'); });
+      kids.push(h('section', { class: 'card' },
+        h('p', { class: 'sub', style: 'margin:0 0 8px' }, '코드를 고른 뒤 칸을 눌러 입력해요. 이름이나 날짜를 누르면 선택한 코드로 빈 칸만 채워요. 재직 기간 밖 날짜(–)는 입력하지 않아요.'),
+        paletteNode(), h('div', { class: 'acts', style: 'align-items:center;margin-top:10px' }, summaryEl, saveBtn, undoBtn, submitWrap)));
+    } else if (mode === 'change') {
+      summaryEl = h('p', { class: 'sub', role: 'status', style: 'margin:0' });
+      changeReason = h('textarea', { id: 'pl-reason', rows: '2', maxlength: '200', style: 'width:100%' });
+      sendBtn = h('button', { type: 'button', class: 'btn primary', onclick: sendChange }, '변경 요청 보내기');
+      undoBtn = h('button', { type: 'button', class: 'btn', onclick: function () { if (!busy) { local = Object.assign({}, server); mode = 'view'; draw(); } } }, '변경 취소');
+      kids.push(h('section', { class: 'card formcard' }, h('h2', null, '변경 요청'),
+        h('p', { class: 'sub', style: 'margin:0 0 8px' }, '승인된 계획은 직접 고칠 수 없어요. 오늘 이후 날짜만 바꿔서 본사에 요청해요. 본사가 승인하면 반영되고 근무시간이 다시 확정돼요.'),
+        paletteNode(), fieldBox('pl-reason', '변경 사유 (필수)', changeReason),
+        h('div', { class: 'acts', style: 'align-items:center;margin-top:10px' }, summaryEl, sendBtn, undoBtn)));
+    } else if (pl) {
+      if (pl.status === 'SUBMITTED') {
+        if (isHQ) {
+          let rejectHost = h('div');
+          kids.push(h('section', { class: 'card formcard' }, h('h2', null, '이 계획을 검토해 주세요'),
+            h('p', { class: 'sub' }, '제출 ' + nameOf(pl.submitted_by) + (pl.submitted_at ? ' · ' + fmtStamp(pl.submitted_at) : '') + '. 승인하면 근무시간이 확정(스냅샷)돼 이후 코드가 바뀌어도 이 달 계획은 그대로예요.'),
+            h('div', { class: 'acts' },
+              confirmAction('승인', '승인하면 직원 출퇴근의 기준이 되고, 직접 수정할 수 없게 돼요.', function () { return mutate('approvePlan', { plan_id: pl.plan_id }, ym + ' 계획을 승인했어요.'); }),
+              h('button', { type: 'button', class: 'btn small', onclick: function () {
+                if (rejectHost.firstChild) { rejectHost.replaceChildren(); return; }
+                rejectHost.append(reasonForm('pl-reject', '반려 사유', '계획 반려', function (v) { return mutate('rejectPlan', { plan_id: pl.plan_id, reason: v }, ym + ' 계획을 반려했어요.'); }));
+                const t = rejectHost.querySelector('textarea'); if (t) t.focus();
+              } }, '반려')), rejectHost));
+        } else {
+          kids.push(h('p', { class: 'msg info', style: 'margin-top:0' }, '본사가 검토 중이에요. 승인되거나 반려될 때까지 수정할 수 없어요.'));
+        }
+      } else if (pl.status === 'APPROVED') {
+        if (data.pending_change) kids.push(pendingCard(data.pending_change));
+        else if (ym >= curYm) {
+          kids.push(h('section', { class: 'card' },
+            h('p', { class: 'sub', style: 'margin:0 0 8px' }, '승인된 계획이에요. 바꿔야 한다면 오늘 이후 날짜에 한해 변경을 요청할 수 있어요.'),
+            h('button', { type: 'button', class: 'btn', onclick: function () { mode = 'change'; brush = undefined; local = Object.assign({}, server); draw(); } }, '변경 요청 시작')));
+        }
+      }
+    } else if (!planMonthEditable(ym, today)) {
+      kids.push(h('p', { class: 'msg info', style: 'margin-top:0' }, ym < curYm ? '지난 달에는 입력된 계획이 없어요. (입력은 당월부터 2개월 후까지만 가능해요)' : '아직 입력할 수 없는 달이에요.'));
+    }
+    actionHost.replaceChildren.apply(actionHost, kids);
+  }
+
+  function draw() {
+    drawHead();
+    drawActions();
+    if (!branchId) {
+      gridHost.replaceChildren(isHQ ? h('p', { class: 'sub' }, '위에서 지점을 고르거나 검토 대기 목록에서 \'열기\'를 눌러 주세요.') : '');
+      return;
+    }
+    const legend = drawLegend();
+    gridHost.replaceChildren(h('section', { class: 'card' }, h('h2', null, ym.slice(0, 4) + '년 ' + parseInt(ym.slice(5, 7), 10) + '월 근무표'), buildGrid(),
+      h('p', { class: 'sub', style: 'margin:8px 0 0' }, '오른쪽 \'근무\'는 근무 코드만 합산한 참고 값이에요. 휴가의 근무시간 환산 기준은 아직 정해지지 않아 포함하지 않아요.'), legend));
+    updateSummary();
+  }
+
+  /* ---------- 시작 ---------- */
+  if (isHQ) {
+    apiCall('listBranches').then(function (r) {
+      if (!ctx.isCurrent()) return;
+      if (!r || !Array.isArray(r.branches)) throw new ApiError('BAD_RESPONSE', '서버 응답 형식이 올바르지 않습니다.');
+      branches = r.branches;
+      branchSel.replaceChildren.apply(branchSel, [h('option', { value: '' }, '지점을 선택하세요')].concat(branches.map(function (b) { return h('option', { value: b.branch_id }, String(b.name) + (b.status === 'ACTIVE' ? '' : ' (중지)')); })));
+      branchSel.value = branchId;
+    }).catch(function (x) {
+      const e = wrapError(x);
+      if (!ctx.isCurrent() || handleCommonError(e)) return;
+      note('bad', '지점 목록을 불러오지 못했어요. ' + e.message);
+    });
+    loadQueue();
+  }
+  draw();
+  load();
+}
+
+/* ===================== 7-5: 오늘 현황 · 근태 검토/정정 (순수 계산 도우미) ===================== */
+const ATT_REASON_TEXT = { OUT_OF_RANGE: '위치 반경 밖', LOW_ACCURACY: 'GPS 정확도 낮음', NO_APPROVED_PLAN: '승인된 계획 없음' };
+const TODAY_STATUS = {
+  WORKING: { label: '근무 중', tone: 'ok' }, DONE: { label: '퇴근', tone: '' }, BEFORE: { label: '출근 전', tone: 'off' },
+  ABSENT: { label: '출근 기록 없음', tone: 'crit' }, OPEN_PREV: { label: '전날 퇴근 미기록', tone: 'crit' },
+  OFF: { label: '휴무', tone: 'off' }, LEAVE: { label: '휴가', tone: 'off' }, NO_PLAN: { label: '계획 미승인', tone: 'warn' }, NO_DAY: { label: '일정 없음', tone: 'warn' }
+};
+function hmToMinutes(hm) {
+  const m = /^(\d{2}):(\d{2})$/.exec(String(hm || ''));
+  return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : NaN;
+}
+function kstNowHM() { const p = kstParts(Date.now()); return pad2(p.hh) + ':' + pad2(p.mm); }
+/* 계획 시작 시각 대비 실제 출근(분): 양수 = 늦음. 지각 여부는 판단하지 않고 사실만 보여 준다. */
+function diffText(min) {
+  if (min == null || !Number.isFinite(Number(min))) return '';
+  const n = Math.round(Number(min));
+  return n === 0 ? '계획 시각 정각' : '계획보다 ' + Math.abs(n) + '분 ' + (n > 0 ? '늦음' : '빠름');
+}
+/* 오늘 한 사람의 상태. sched = 승인된 계획 칸(snapshot 포함) 또는 null, planApproved = 이 달 계획이 승인됐는지 */
+function todayRowStatus(o) {
+  if (o.openPrev) return 'OPEN_PREV';
+  if (o.rec) return o.rec.open ? 'WORKING' : 'DONE';
+  if (!o.planApproved) return 'NO_PLAN';
+  const s = o.sched && o.sched.snapshot;
+  if (!s) return 'NO_DAY';
+  if (s.type === 'OFF') return 'OFF';
+  if (s.type === 'LEAVE') return 'LEAVE';
+  if (s.type === 'WORK') {
+    const st = hmToMinutes(s.start), now = hmToMinutes(o.nowHM);
+    return Number.isFinite(st) && Number.isFinite(now) && now >= st ? 'ABSENT' : 'BEFORE';
+  }
+  return 'NO_DAY';
+}
+function attReasonsText(list) {
+  return (Array.isArray(list) ? list : []).map(function (x) { return ATT_REASON_TEXT[x] || x; }).join(', ');
+}
+/* 입력한 근무일·시각이 지금(KST)보다 미래인지 */
+function isFutureKst(date, hm, nowDate, nowHM) {
+  return date > nowDate || (date === nowDate && hm > nowHM);
+}
+function nextDateStr(d) {
+  const t = new Date(d + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() + 1);
+  return t.toISOString().slice(0, 10);
+}
+function daysApart(a, b) {
+  return Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / 86400000);
+}
+
+/* ===================== 7-5: 오늘 현황 ===================== */
+function renderToday(host, ctx) {
+  const me = ctx.user;
+  const isHQ = me.role === 'HQ';
+  const today = kstTodayStr();
+  const yesterday = new Date(Date.parse(today + 'T00:00:00Z') - 86400000).toISOString().slice(0, 10);
+  const ym = today.slice(0, 7);
+  const wrap = h('div', { class: 'stack' });
+  host.append(wrap);
+  const noteHost = h('div');
+  const summaryHost = h('div');
+  const body = h('div', { class: 'stack' });
+  const stamp = h('span', { class: 'sub', role: 'status' });
+  const refresh = h('button', { type: 'button', class: 'btn small' }, '새로 고침');
+  wrap.append(h('section', { class: 'card' }, h('div', { class: 'toolbar' }, h('h2', null, (isHQ ? '전 지점 현황' : '오늘 현황') + ' · ' + fmtDateLabel(today)), h('div', { class: 'acts', style: 'align-items:center' }, stamp, refresh)),
+    h('p', { class: 'sub', style: 'margin:6px 0 0' }, '승인된 월간 계획과 오늘의 출퇴근 기록을 맞춰 보여줘요. 자동으로 갱신되지 않으니 필요할 때 \'새로 고침\'을 눌러 주세요.')), noteHost, summaryHost, body);
+
+  let loadSeq = 0;
+  let busy = false;
+  refresh.addEventListener('click', function () { if (!busy) load(); });
+
+  async function load() {
+    const my = ++loadSeq;
+    busy = true; refresh.disabled = true;
+    body.replaceChildren(h('p', { class: 'sub' }, '불러오는 중…'));
+    summaryHost.replaceChildren(); noteHost.replaceChildren();
+    try {
+      let branchList;
+      if (isHQ) {
+        const br = await apiCall('listBranches');
+        if (!ctx.isCurrent() || my !== loadSeq) return;
+        if (!br || !Array.isArray(br.branches)) throw new ApiError('BAD_RESPONSE', '서버 응답 형식이 올바르지 않습니다.');
+        branchList = br.branches.filter(function (b) { return b.status === 'ACTIVE'; });
+      } else {
+        branchList = [{ branch_id: me.branch_id, name: me.branch_name || me.branch_id, status: 'ACTIVE' }];
+      }
+      const att = await apiCall('listAttendance', { from: yesterday, to: today, filter: 'ALL' });
+      if (!ctx.isCurrent() || my !== loadSeq) return;
+      if (!att || !Array.isArray(att.records)) throw new ApiError('BAD_RESPONSE', '서버 응답 형식이 올바르지 않습니다.');
+      const plans = await Promise.all(branchList.map(function (b) {
+        return apiCall('getPlan', { branch_id: b.branch_id, ym: ym }).then(function (r) { return { b: b, r: r }; }, function (x) { return { b: b, err: wrapError(x) }; });
+      }));
+      if (!ctx.isCurrent() || my !== loadSeq) return;
+      const authLost = plans.map(function (p) { return p.err; }).find(function (e) { return e && handleCommonError(e); });
+      if (authLost) return;
+      draw(branchList, att, plans);
+    } catch (x) {
+      const e = wrapError(x);
+      if (!ctx.isCurrent() || my !== loadSeq || handleCommonError(e)) return;
+      body.replaceChildren(errBlock(e, load));
+    } finally {
+      if (my === loadSeq) { busy = false; refresh.disabled = false; }
+    }
+  }
+
+  function draw(branchList, att, plans) {
+    const nowHM = kstNowHM();
+    stamp.textContent = '기준 ' + nowHM;
+    if (att.truncated) noteHost.replaceChildren(h('p', { class: 'msg warn', style: 'margin-top:0' }, '기록이 너무 많아 일부만 보여요. 지점별로 나눠 확인해 주세요.'));
+    const totals = { WORKING: 0, BEFORE: 0, ABSENT: 0, OPEN_PREV: 0, DONE: 0, REVIEW: 0 };
+    const sections = plans.map(function (pp) {
+      const bid = pp.b.branch_id;
+      const head = h('h3', { style: 'margin:0 0 6px' }, String(pp.b.name));
+      if (pp.err) return h('section', { class: 'card' }, head, h('p', { class: 'msg bad', style: 'margin-top:0' }, '이 지점 계획을 불러오지 못했어요. ' + pp.err.message));
+      const r = pp.r;
+      if (!r || !Array.isArray(r.users) || !Array.isArray(r.days)) return h('section', { class: 'card' }, head, h('p', { class: 'msg bad', style: 'margin-top:0' }, '서버 응답 형식이 올바르지 않습니다.'));
+      const approved = !!(r.plan && r.plan.status === 'APPROVED');
+      const recs = att.records.filter(function (x) { return x.branch_id === bid; });
+      const rows = [];
+      const known = {};
+      r.users.forEach(function (u) {
+        known[u.user_id] = true;
+        const rec = recs.find(function (x) { return x.user_id === u.user_id && x.work_date === today; }) || null;
+        const prev = recs.find(function (x) { return x.user_id === u.user_id && x.work_date !== today && x.open; }) || null;
+        const sched = r.days.find(function (d) { return d.user_id === u.user_id && d.date === today; }) || null;
+        const key = todayRowStatus({ planApproved: approved, sched: sched, rec: rec, openPrev: prev, nowHM: nowHM });
+        rows.push({ name: u.name, role: u.role, sched: sched, rec: rec, prev: prev, key: key });
+      });
+      recs.forEach(function (x) { // 계획에 없는 사람의 기록(정정으로 생성되었거나 재직 기간 변경)
+        if (!known[x.user_id] && x.work_date === today) rows.push({ name: x.user_name || x.user_id, role: '', sched: null, rec: x, prev: null, key: x.open ? 'WORKING' : 'DONE' });
+      });
+      rows.forEach(function (x) {
+        if (totals[x.key] !== undefined) totals[x.key]++;
+        if (x.rec && x.rec.review_status === 'PENDING') totals.REVIEW++;
+      });
+      const planNote = !r.plan ? '이 달 계획이 아직 없어요.' : approved ? '' : '이 달 계획이 아직 승인되지 않아 예정 근무를 알 수 없어요. (' + (PLAN_STATUS_LABEL[r.plan.status] || r.plan.status) + ')';
+      const trs = rows.map(function (x) {
+        const st = TODAY_STATUS[x.key];
+        const s = x.sched && x.sched.snapshot;
+        const planTxt = s ? (s.type === 'WORK' ? x.sched.code + ' ' + s.start + '–' + s.end : daySnapLabel(x.sched)) : '-';
+        const pills = [h('span', { class: 'pill ' + st.tone }, st.label)];
+        if (x.rec && x.rec.review_status === 'PENDING') pills.push(h('span', { class: 'pill warn', title: attReasonsText(x.rec.review_reasons) }, '확인 대기'));
+        if (x.rec && x.rec.late === true) pills.push(h('span', { class: 'pill warn' }, '지각'));
+        const diff = x.rec ? diffText(x.rec.in_diff_min) : '';
+        return h('tr', null,
+          h('td', null, h('b', null, x.name), x.role === 'GM' ? h('div', { class: 'sub' }, '총지배인') : null),
+          h('td', null, planTxt),
+          h('td', { class: 'mono' }, x.rec ? fmtHM(x.rec.in_at) : (x.prev ? fmtShortDate(x.prev.work_date) + ' ' + fmtHM(x.prev.in_at) : '-'), diff ? h('div', { class: 'sub' }, diff) : null),
+          h('td', { class: 'mono' }, x.rec && x.rec.out_at ? fmtHM(x.rec.out_at) : '-'),
+          h('td', null, h('div', { class: 'acts' }, pills), x.rec && x.rec.review_status === 'PENDING' ? h('div', { class: 'sub' }, attReasonsText(x.rec.review_reasons)) : null));
+      });
+      return h('section', { class: 'card' }, head, planNote ? h('p', { class: 'msg warn', style: 'margin-top:0' }, planNote) : null,
+        rows.length ? h('div', { class: 'scroll' }, h('table', { class: 't' }, h('thead', null, h('tr', null, ['직원', '예정', '출근', '퇴근', '상태'].map(function (t) { return h('th', null, t); }))), h('tbody', null, trs)))
+          : h('p', { class: 'sub' }, '오늘 계획 대상 직원이 없어요.'));
+    });
+    summaryHost.replaceChildren(h('section', { class: 'card' }, h('div', { class: 'acts', style: 'align-items:center' },
+      h('span', { class: 'pill ok' }, '근무 중 ' + totals.WORKING), h('span', { class: 'pill off' }, '출근 전 ' + totals.BEFORE),
+      h('span', { class: 'pill ' + (totals.ABSENT ? 'crit' : 'off') }, '출근 기록 없음 ' + totals.ABSENT),
+      h('span', { class: 'pill ' + (totals.OPEN_PREV ? 'crit' : 'off') }, '전날 퇴근 미기록 ' + totals.OPEN_PREV),
+      h('span', { class: 'pill' }, '퇴근 ' + totals.DONE),
+      h('span', { class: 'pill ' + (totals.REVIEW ? 'warn' : 'off') }, '확인 대기 ' + totals.REVIEW),
+      totals.REVIEW + totals.OPEN_PREV + totals.ABSENT > 0 ? h('button', { type: 'button', class: 'btn small', onclick: function () { ctx.go('review'); } }, '근태 검토로 이동') : null)));
+    body.replaceChildren.apply(body, sections);
+  }
+
+  load();
+}
+
+/* ===================== 7-5: 근태 검토 · 정정 ===================== */
+function renderReview(host, ctx) {
+  const me = ctx.user;
+  const isHQ = me.role === 'HQ';
+  const today = kstTodayStr();
+  let branchId = isHQ ? '' : me.branch_id;
+  let from = today.slice(0, 7) + '-01';
+  let to = today;
+  let filter = 'REVIEW';
+  let nameQ = '';
+  let records = [];
+  let truncated = false;
+  let branches = [];
+  let loadSeq = 0;
+  let busy = false;
+
+  const wrap = h('div', { class: 'stack' });
+  host.append(wrap);
+  const noteHost = h('div');
+  const formHost = h('div');
+  const listHost = h('div', null, h('p', { class: 'sub' }, '불러오는 중…'));
+  const branchSel = isHQ ? selectInput('rv-branch', [['', '전체 지점']], '') : null;
+  const fromIn = h('input', { id: 'rv-from', type: 'date' });
+  const toIn = h('input', { id: 'rv-to', type: 'date' });
+  const filterSel = selectInput('rv-filter', [['REVIEW', '확인 대기'], ['OPEN', '퇴근 미기록'], ['ALL', '전체']], 'REVIEW');
+  const nameIn = textInput('rv-name', { maxlength: '30', placeholder: '이름 일부' });
+  fromIn.value = from; toIn.value = to;
+  const applyBtn = h('button', { type: 'button', class: 'btn primary small' }, '조회');
+  const addBtn = h('button', { type: 'button', class: 'btn small' }, '누락 기록 추가');
+  wrap.append(h('section', { class: 'card' }, h('div', { class: 'toolbar' }, h('h2', null, '근태 검토 · 정정'), addBtn),
+    h('div', { class: 'row2' }, fieldBox('rv-from', '시작일', fromIn), fieldBox('rv-to', '종료일', toIn)),
+    h('div', { class: 'row2' }, isHQ ? fieldBox('rv-branch', '지점', branchSel) : null, fieldBox('rv-filter', '보기', filterSel)),
+    fieldBox('rv-name', '직원 이름', nameIn), h('div', { class: 'formbtns' }, applyBtn)), noteHost, formHost, h('section', { class: 'card' }, listHost));
+
+  function note(kind, text) {
+    noteHost.replaceChildren(h('p', { class: 'msg ' + kind, role: 'status', style: 'margin-top:0' }, text));
+    announce(text);
+  }
+  function readFilters() {
+    const f = fromIn.value, t = toIn.value;
+    if (!okDate(f) || !okDate(t)) { note('bad', '조회 기간(시작일·종료일)을 입력해 주세요.'); return false; }
+    if (f > t) { note('bad', '시작일이 종료일보다 늦어요.'); return false; }
+    if (daysApart(f, t) > 61) { note('bad', '한 번에 최대 62일까지 조회할 수 있어요.'); return false; }
+    from = f; to = t; filter = filterSel.value; nameQ = cleanText(nameIn.value);
+    if (isHQ) branchId = branchSel.value;
+    return true;
+  }
+  applyBtn.addEventListener('click', function () { if (!busy && readFilters()) { noteHost.replaceChildren(); load(); } });
+
+  async function load() {
+    const my = ++loadSeq;
+    busy = true; applyBtn.disabled = true;
+    listHost.replaceChildren(h('p', { class: 'sub' }, '불러오는 중…'));
+    try {
+      const params = { from: from, to: to, filter: filter };
+      if (isHQ && branchId) params.branch_id = branchId;
+      const r = await apiCall('listAttendance', params);
+      if (!ctx.isCurrent() || my !== loadSeq) return;
+      if (!r || !Array.isArray(r.records)) throw new ApiError('BAD_RESPONSE', '서버 응답 형식이 올바르지 않습니다.');
+      records = r.records; truncated = !!r.truncated;
+      draw();
+    } catch (x) {
+      const e = wrapError(x);
+      if (!ctx.isCurrent() || my !== loadSeq || handleCommonError(e)) return;
+      listHost.replaceChildren(errBlock(e, load));
+    } finally {
+      if (my === loadSeq) { busy = false; applyBtn.disabled = false; }
+    }
+  }
+
+  function draw() {
+    const q = nameQ.toLowerCase();
+    const list = records.filter(function (r) { return !q || String(r.user_name || '').toLowerCase().indexOf(q) >= 0; });
+    const kids = [];
+    if (truncated) kids.push(h('p', { class: 'msg warn', style: 'margin-top:0' }, '기록이 너무 많아 일부만 보여요. 기간이나 지점을 좁혀 주세요.'));
+    if (!list.length) {
+      kids.push(h('p', { class: 'sub' }, filter === 'REVIEW' ? '확인할 기록이 없어요. 위치 이탈이나 승인 전 계획으로 표시된 기록이 없다는 뜻이에요.' : '조건에 맞는 기록이 없어요.'));
+      listHost.replaceChildren.apply(listHost, kids); return;
+    }
+    kids.push(h('p', { class: 'sub', style: 'margin:0 0 6px' }, list.length + '건'));
+    const trs = list.map(function (r) {
+      const pills = [];
+      if (r.open) pills.push(h('span', { class: 'pill ' + (r.stale ? 'crit' : 'warn') }, r.stale ? '퇴근 미기록(오래됨)' : '근무 중'));
+      if (r.late === true) pills.push(h('span', { class: 'pill warn' }, '지각'));
+      if (r.review_status === 'PENDING') pills.push(h('span', { class: 'pill warn' }, '확인 대기'));
+      else if (r.review_status === 'CONFIRMED') pills.push(h('span', { class: 'pill' }, '확인됨'));
+      if (r.source === 'MANUAL') pills.push(h('span', { class: 'pill info' }, '수기 입력'));
+      const extra = [];
+      if (r.review_reasons && r.review_reasons.length) extra.push(attReasonsText(r.review_reasons));
+      if (Number.isFinite(Number(r.in_dist_m)) && r.in_dist_m != null) extra.push('출근 거리 약 ' + r.in_dist_m + 'm');
+      if (Number.isFinite(Number(r.out_dist_m)) && r.out_dist_m != null) extra.push('퇴근 거리 약 ' + r.out_dist_m + 'm');
+      const dtx = diffText(r.in_diff_min);
+      if (dtx) extra.push(dtx);
+      if (r.review_note) extra.push('메모: ' + r.review_note);
+      if (r.correct_reason) extra.push('정정 사유: ' + r.correct_reason);
+      return h('tr', null,
+        h('td', null, fmtShortDate(r.work_date)),
+        h('td', null, h('b', null, r.user_name || r.user_id), r.plan ? h('div', { class: 'sub' }, r.plan.code + ' ' + r.plan.start + '–' + r.plan.end) : (r.plan_state === 'UNAPPROVED' ? h('div', { class: 'sub' }, '승인 전 계획') : null)),
+        h('td', { class: 'mono' }, fmtHM(r.in_at) + ' ~ ' + (r.out_at ? fmtHM(r.out_at) : '-'), r.work_min != null ? h('div', { class: 'sub' }, fmtDur(r.work_min)) : null),
+        h('td', null, h('div', { class: 'acts' }, pills), extra.length ? h('div', { class: 'sub' }, extra.join(' · ')) : null),
+        h('td', { class: 'acts-cell' }, h('div', { class: 'acts' },
+          h('button', { type: 'button', class: 'btn small', 'aria-label': (r.user_name || r.user_id) + ' ' + fmtShortDate(r.work_date) + ' 확인', onclick: function () { openReview(r); } }, '확인'),
+          h('button', { type: 'button', class: 'btn small', 'aria-label': (r.user_name || r.user_id) + ' ' + fmtShortDate(r.work_date) + ' 정정', onclick: function () { openCorrect(r); } }, '정정'))));
+    });
+    kids.push(h('div', { class: 'scroll' }, h('table', { class: 't' }, h('thead', null, h('tr', null, ['날짜', '직원', '출근 ~ 퇴근', '상태', ''].map(function (t) { return h('th', null, t); }))), h('tbody', null, trs))));
+    listHost.replaceChildren.apply(listHost, kids);
+  }
+
+  /* ---------- 공통: 저장 폼 껍데기 ---------- */
+  function formBox(title, bodyKids, action, okText, collect, submitLabel) {
+    let sending = false;
+    const err = h('p', { role: 'alert', hidden: true });
+    const save = h('button', { type: 'submit', class: 'btn primary' }, submitLabel);
+    const form = h('form', {
+      novalidate: true,
+      onsubmit: async function (ev) {
+        ev.preventDefault();
+        if (sending) return;
+        err.hidden = true;
+        const p = collect(function (el, m) { if (el) { setInvalid(el, true); el.focus(); } showMsg(err, m); });
+        if (!p) return;
+        sending = true; save.disabled = true; save.textContent = '저장 중…';
+        try {
+          await apiCall(action, p);
+          if (!ctx.isCurrent()) return;
+          formHost.replaceChildren();
+          note('ok', okText);
+          load();
+        } catch (x) {
+          const e = wrapError(x);
+          if (handleCommonError(e)) return;
+          showMsg(err, e.message + (e.uncertain ? ' 처리되었을 수 있으니 목록을 다시 조회해 주세요.' : ''));
+          if (e.uncertain) load();
+        } finally {
+          sending = false; save.disabled = false; save.textContent = submitLabel;
+        }
+      }
+    }, bodyKids, err, h('div', { class: 'formbtns' }, save, h('button', { type: 'button', class: 'btn', onclick: function () { formHost.replaceChildren(); } }, '취소')));
+    formHost.replaceChildren(h('section', { class: 'card formcard' }, h('h2', null, title), form));
+    try { form.querySelector('input,select,textarea').focus(); } catch (e) { /* 무시 */ }
+    try { formHost.scrollIntoView({ block: 'nearest' }); } catch (e) { /* 무시 */ }
+  }
+  const lateSelect = function (cur) { return selectInput('rv-late', [['', '지각 여부 그대로'], ['Y', '지각'], ['N', '지각 아님']], cur === true ? 'Y' : cur === false ? 'N' : ''); };
+
+  /* ---------- 확인(검토 완료) ---------- */
+  function openReview(r) {
+    const late = lateSelect(r.late);
+    const memo = textInput('rv-note', { maxlength: '200', placeholder: '선택' });
+    memo.value = r.review_note || '';
+    const kids = [
+      h('p', { class: 'sub', style: 'margin:8px 0 0' }, (r.user_name || r.user_id) + ' · ' + fmtDateLabel(r.work_date) + ' · ' + fmtHM(r.in_at) + ' ~ ' + (r.out_at ? fmtHM(r.out_at) : '-') + (r.review_reasons && r.review_reasons.length ? ' · ' + attReasonsText(r.review_reasons) : '')),
+      fieldBox('rv-late', '지각 여부', late, '계획 출근 시각과 얼마나 차이 나는지는 위 표에 나와요. 지각으로 볼지는 여기서 직접 정해요.'),
+      fieldBox('rv-note', '확인 메모', memo)
+    ];
+    formBox('기록 확인', kids, 'reviewAttendance', fmtShortDate(r.work_date) + ' ' + (r.user_name || '') + ' 기록을 확인 처리했어요.', function (bad) {
+      setInvalid(memo, false);
+      const nm = cleanText(memo.value);
+      const np = nm ? textProblem(nm, '확인 메모', 1, 200) : '';
+      if (np) return bad(memo, np), null;
+      const p = { att_id: r.att_id };
+      const curLate = r.late === true ? 'Y' : r.late === false ? 'N' : '';
+      if (late.value && late.value !== curLate) p.late = late.value;
+      if (nm !== cleanText(r.review_note || '')) p.note = nm;
+      if (r.review_status === 'CONFIRMED' && p.late === undefined && p.note === undefined) return bad(null, '이미 확인된 기록이에요. 바꿀 내용이 없어요.'), null;
+      return p;
+    }, '확인 처리');
+  }
+
+  /* ---------- 정정 · 누락 기록 추가 ---------- */
+  async function openCorrect(r) {
+    const editing = !!r;
+    formHost.replaceChildren(h('section', { class: 'card' }, h('p', { class: 'sub' }, '불러오는 중…')));
+    let users;
+    try {
+      const bid = editing ? (r.branch_id || branchId) : branchId;
+      const res = await apiCall('listUsers', isHQ && bid ? { branch_id: bid } : {});
+      if (!ctx.isCurrent()) return;
+      if (!res || !Array.isArray(res.users)) throw new ApiError('BAD_RESPONSE', '서버 응답 형식이 올바르지 않습니다.');
+      users = res.users.filter(function (u) { return u.role !== 'HQ' && (u.status === 'ACTIVE' || (editing && u.user_id === r.user_id)); });
+    } catch (x) {
+      const e = wrapError(x);
+      if (!ctx.isCurrent() || handleCommonError(e)) return;
+      formHost.replaceChildren(h('section', { class: 'card' }, h('p', { class: 'msg bad', style: 'margin-top:0' }, e.message)));
+      return;
+    }
+    if (!users.length) { formHost.replaceChildren(h('section', { class: 'card' }, h('p', { class: 'msg warn', style: 'margin-top:0' }, isHQ && !branchId && !editing ? '누락 기록을 추가하려면 위에서 지점을 먼저 고르고 \'조회\'를 눌러 주세요.' : '정정할 수 있는 직원이 없어요.'))); return; }
+    const userSel = selectInput('rv-user', users.map(function (u) { return [u.user_id, u.name + (u.role === 'GM' ? ' (총지배인)' : '')]; }), editing ? r.user_id : users[0].user_id);
+    if (editing) userSel.disabled = true;
+    const dateIn = h('input', { id: 'rv-date', type: 'date', max: today });
+    const inIn = h('input', { id: 'rv-in', type: 'time' });
+    const outIn = h('input', { id: 'rv-out', type: 'time' });
+    const nextDay = h('input', { id: 'rv-nextday', type: 'checkbox' });
+    const late = lateSelect(editing ? r.late : null);
+    const reason = h('textarea', { id: 'rv-reason', rows: '2', maxlength: '200', style: 'width:100%' });
+    if (editing) {
+      dateIn.value = r.work_date; dateIn.disabled = true;
+      inIn.value = fmtHM(r.in_at) === '-' ? '' : fmtHM(r.in_at);
+      if (r.out_at) { outIn.value = fmtHM(r.out_at); nextDay.checked = String(r.out_at).slice(0, 10) !== r.work_date; }
+    }
+    const kids = [
+      fieldBox('rv-user', '직원', userSel), fieldBox('rv-date', '근무일', dateIn),
+      h('div', { class: 'row2' }, fieldBox('rv-in', '출근', inIn), fieldBox('rv-out', '퇴근 (없으면 비움)', outIn)),
+      h('label', { class: 'chk sub', for: 'rv-nextday' }, nextDay, '퇴근이 다음 날이에요 (야간 근무)'),
+      fieldBox('rv-late', '지각 여부', late), fieldBox('rv-reason', '정정 사유 (필수)', reason, '감사 기록에 남아요. 예) 단말기 오류로 출근 버튼을 누르지 못함')
+    ];
+    formBox(editing ? '기록 정정 · ' + (r.user_name || '') + ' ' + fmtShortDate(r.work_date) : '누락 기록 추가', kids, 'correctAttendance',
+      editing ? '기록을 정정했어요.' : '기록을 추가했어요.', function (bad) {
+        [dateIn, inIn, outIn, reason].forEach(function (el) { setInvalid(el, false); });
+        const wd = dateIn.value;
+        if (!okDate(wd)) return bad(dateIn, '근무일을 입력해 주세요.'), null;
+        if (wd > today) return bad(dateIn, '미래 날짜는 정정할 수 없어요.'), null;
+        if (!/^\d{2}:\d{2}$/.test(inIn.value)) return bad(inIn, '출근 시각을 입력해 주세요.'), null;
+        const inDate = wd;
+        const hasOut = !!outIn.value;
+        if (hasOut && !/^\d{2}:\d{2}$/.test(outIn.value)) return bad(outIn, '퇴근 시각 형식이 올바르지 않아요.'), null;
+        const outDate = nextDay.checked ? nextDateStr(wd) : wd;
+        const nowD = kstTodayStr(), nowT = kstNowHM();
+        if (isFutureKst(inDate, inIn.value, nowD, nowT)) return bad(inIn, '현재 시각 이후로는 입력할 수 없어요.'), null;
+        if (hasOut) {
+          if (isFutureKst(outDate, outIn.value, nowD, nowT)) return bad(outIn, '현재 시각 이후로는 입력할 수 없어요.'), null;
+          const a = Date.parse(inDate + 'T' + inIn.value + ':00+09:00'), b = Date.parse(outDate + 'T' + outIn.value + ':00+09:00');
+          if (b <= a) return bad(outIn, '퇴근 시각은 출근 시각보다 늦어야 해요. 야간 근무라면 \'다음 날\'에 체크해 주세요.'), null;
+          if (b - a > 24 * 3600000) return bad(outIn, '출근과 퇴근 간격은 24시간을 넘을 수 없어요.'), null;
+        } else if (editing && r.out_at) return bad(outIn, '이미 기록된 퇴근 시각은 비울 수 없어요.'), null;
+        const rs = cleanText(reason.value);
+        const rp = textProblem(rs, '정정 사유', 2, 200);
+        if (rp) return bad(reason, rp), null;
+        const p = { user_id: userSel.value, work_date: wd, in_at: inDate + ' ' + inIn.value, reason: rs };
+        if (hasOut) p.out_at = outDate + ' ' + outIn.value;
+        if (late.value) p.late = late.value;
+        return p;
+      }, editing ? '정정 저장' : '추가 저장');
+  }
+  addBtn.addEventListener('click', function () { if (isHQ && !branchId) { note('warn', '누락 기록을 추가하려면 먼저 지점을 고르고\'조회\'를 눌러 주세요.'); return; } openCorrect(null); });
+
+  /* ---------- 시작 ---------- */
+  if (isHQ) {
+    apiCall('listBranches').then(function (r) {
+      if (!ctx.isCurrent()) return;
+      if (!r || !Array.isArray(r.branches)) throw new ApiError('BAD_RESPONSE', '서버 응답 형식이 올바르지 않습니다.');
+      branches = r.branches;
+      branchSel.replaceChildren.apply(branchSel, [h('option', { value: '' }, '전체 지점')].concat(branches.map(function (b) { return h('option', { value: b.branch_id }, String(b.name)); })));
+      branchSel.value = branchId;
+    }).catch(function (x) {
+      const e = wrapError(x);
+      if (!ctx.isCurrent() || handleCommonError(e)) return;
+      note('bad', '지점 목록을 불러오지 못했어요. ' + e.message);
+    });
+  }
+  load();
+}
+/* ===================== 7-6: 엑셀 저장 (CSV, 외부 라이브러리 없음) ===================== */
+const EXPORT_MAX_DAYS = 62;
+const PLAN_STATE_TEXT = { APPROVED: '승인된 계획', UNAPPROVED: '승인 전 계획', EXCEPTION: '예외' };
+const REVIEW_STATUS_TEXT = { NONE: '해당 없음', PENDING: '확인 대기', CONFIRMED: '확인됨' };
+/* 엑셀이 수식으로 해석하는 시작 문자(= + - @ 탭 CR)를 막는다(CSV 수식 주입 방어). 숫자 타입은 그대로. */
+function csvCell(v) {
+  if (v == null) return '';
+  if (typeof v === 'number') return Number.isFinite(v) ? String(v) : '';
+  let s = String(v).replace(/\r\n|\r|\n/g, ' ');
+  if (/^[=+\-@\t]/.test(s)) s = "'" + s;
+  return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+function csvText(header, rows) {
+  const lines = [header.map(csvCell).join(',')];
+  rows.forEach(function (r) { lines.push(r.map(csvCell).join(',')); });
+  return '﻿' + lines.join('\r\n') + '\r\n';
+}
+function hmText(min) { const n = Number(min); if (min == null || !Number.isFinite(n) || n < 0) return ''; return Math.floor(n / 60) + ':' + pad2(Math.round(n % 60)); }
+function attStatusText(r) { return r.open ? (r.stale ? '퇴근 미기록(오래됨)' : '근무 중') : '퇴근 완료'; }
+function lateText(r) { return r.late === true ? '지각' : r.late === false ? '지각 아님' : '미지정'; }
+const ATT_HEADER = ['근무일', '지점', '직원', '계획 코드', '계획 시작', '계획 종료', '출근', '퇴근', '근무(분)', '근무(시:분)', '상태', '계획 대비 출근(분, +늦음)', '지각', '계획 상태', '확인 상태', '확인 사유', '확인 메모', '입력 방식', '정정 사유'];
+function attRows(records, branchName) {
+  const list = records.slice().sort(function (a, b) { return String(a.work_date).localeCompare(String(b.work_date)) || String(a.user_name || '').localeCompare(String(b.user_name || ''), 'ko'); });
+  return list.map(function (r) {
+    const p = r.plan || {};
+    return [r.work_date, branchName(r.branch_id), r.user_name || r.user_id, p.code || '', p.start || '', p.end || '',
+      fmtHM(r.in_at) === '-' ? '' : fmtHM(r.in_at), r.out_at ? fmtHM(r.out_at) : '',
+      r.work_min != null && Number.isFinite(Number(r.work_min)) ? Number(r.work_min) : null, hmText(r.work_min), attStatusText(r),
+      r.in_diff_min != null && Number.isFinite(Number(r.in_diff_min)) ? Number(r.in_diff_min) : null, lateText(r),
+      PLAN_STATE_TEXT[r.plan_state] || '', REVIEW_STATUS_TEXT[r.review_status] || '', attReasonsText(r.review_reasons), r.review_note || '',
+      r.source === 'MANUAL' ? '수기 입력' : '앱', r.correct_reason || ''];
+  });
+}
+const SUM_HEADER = ['지점', '직원', '기록 일수', '기록상 근무 합계(분)', '근무 합계(시:분)', '지각 건수', '퇴근 미기록 건수', '확인 대기 건수'];
+function sumRows(records, branchName) {
+  const m = {};
+  records.forEach(function (r) {
+    const k = r.branch_id + '|' + r.user_id;
+    const o = m[k] || (m[k] = { b: r.branch_id, n: r.user_name || r.user_id, days: 0, min: 0, late: 0, open: 0, pend: 0 });
+    o.days += 1;
+    if (r.work_min != null && Number.isFinite(Number(r.work_min))) o.min += Number(r.work_min);
+    if (r.late === true) o.late += 1;
+    if (r.open) o.open += 1;
+    if (r.review_status === 'PENDING') o.pend += 1;
+  });
+  return Object.keys(m).map(function (k) { return m[k]; })
+    .sort(function (a, b) { return String(a.b).localeCompare(String(b.b)) || a.n.localeCompare(b.n, 'ko'); })
+    .map(function (o) { return [branchName(o.b), o.n, o.days, o.min, hmText(o.min), o.late, o.open, o.pend]; });
+}
+function safeFileName(s) { return String(s).replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 60); }
+function saveTextFile(name, text) {
+  const blob = new Blob([text], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name; a.style.display = 'none';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+}
+
+function renderExport(host, ctx) {
+  const me = ctx.user;
+  const isHQ = me.role === 'HQ';
+  const today = kstTodayStr();
+  let branches = [];
+  let busy = false;
+  const wrap = h('div', { class: 'stack' });
+  host.append(wrap);
+  const noteHost = h('div');
+  const fromIn = h('input', { id: 'ex-from', type: 'date' });
+  const toIn = h('input', { id: 'ex-to', type: 'date' });
+  fromIn.value = today.slice(0, 7) + '-01'; toIn.value = today;
+  const branchSel = isHQ ? selectInput('ex-branch', [['', '전체 지점']], '') : null;
+  const detailBtn = h('button', { type: 'button', class: 'btn primary' }, '근태 기록 저장');
+  const sumBtn = h('button', { type: 'button', class: 'btn' }, '직원별 요약 저장');
+  wrap.append(h('section', { class: 'card' }, h('h2', null, '엑셀 저장'),
+    h('p', { class: 'sub' }, '엑셀로 열리는 CSV 파일로 저장해요. 위치(거리) 정보는 담지 않아요.'),
+    h('div', { class: 'row2' }, fieldBox('ex-from', '시작일', fromIn), fieldBox('ex-to', '종료일', toIn)),
+    isHQ ? fieldBox('ex-branch', '지점', branchSel) : null,
+    h('div', { class: 'formbtns' }, detailBtn, sumBtn),
+    h('p', { class: 'sub' }, '직원별 요약의 근무 합계는 기록된 근무 시간을 단순히 더한 참고 값이에요. 초과근무·휴가 환산은 반영하지 않아요.')), noteHost);
+
+  function note(kind, text) { noteHost.replaceChildren(h('p', { class: 'msg ' + kind, role: 'status', style: 'margin-top:0' }, text)); announce(text); }
+  function bName(id) { const b = branches.find(function (x) { return x.branch_id === id; }); return b ? b.name : (id === me.branch_id ? me.branch_name || id : id); }
+
+  if (isHQ) {
+    apiCall('listBranches', {}).then(function (r) {
+      if (!ctx.isCurrent() || !r || !Array.isArray(r.branches)) return;
+      branches = r.branches;
+      r.branches.forEach(function (b) { const o = h('option', { value: b.branch_id }, b.name + (b.status === 'ACTIVE' ? '' : ' (중지)')); branchSel.append(o); });
+    }).catch(function (x) { const e = wrapError(x); if (ctx.isCurrent()) handleCommonError(e); });
+  }
+
+  async function run(kind) {
+    if (busy) return;
+    noteHost.replaceChildren();
+    const f = fromIn.value, t = toIn.value;
+    if (!okDate(f) || !okDate(t)) return note('bad', '저장할 기간(시작일·종료일)을 입력해 주세요.');
+    if (f > t) return note('bad', '시작일이 종료일보다 늦어요.');
+    if (daysApart(f, t) > EXPORT_MAX_DAYS - 1) return note('bad', '한 번에 최대 ' + EXPORT_MAX_DAYS + '일까지 저장할 수 있어요.');
+    busy = true; detailBtn.disabled = true; sumBtn.disabled = true;
+    try {
+      const params = { from: f, to: t, filter: 'ALL' };
+      const bid = isHQ ? branchSel.value : '';
+      if (bid) params.branch_id = bid;
+      const r = await apiCall('listAttendance', params);
+      if (!ctx.isCurrent()) return;
+      if (!r || !Array.isArray(r.records)) throw new ApiError('BAD_RESPONSE', '서버 응답 형식이 올바르지 않습니다.');
+      if (r.truncated) return note('bad', '기록이 너무 많아 일부만 조회됐어요. 일부만 저장하면 집계가 틀어지므로 저장하지 않았어요. 기간이나 지점을 좁혀 주세요.');
+      if (!r.records.length) return note('warn', '이 기간에는 저장할 기록이 없어요.');
+      const label = bid ? bName(bid) : (isHQ ? '전체지점' : bName(me.branch_id));
+      if (kind === 'detail') {
+        saveTextFile('근태기록_' + safeFileName(label) + '_' + f + '_' + t + '.csv', csvText(ATT_HEADER, attRows(r.records, bName)));
+      } else {
+        saveTextFile('직원별요약_' + safeFileName(label) + '_' + f + '_' + t + '.csv', csvText(SUM_HEADER, sumRows(r.records, bName)));
+      }
+      note('ok', r.records.length + '건을 저장했어요. 다운로드 폴더를 확인해 주세요.');
+    } catch (x) {
+      const e = wrapError(x);
+      if (!ctx.isCurrent() || handleCommonError(e)) return;
+      note('bad', e.message);
+    } finally { busy = false; detailBtn.disabled = false; sumBtn.disabled = false; }
+  }
+  detailBtn.addEventListener('click', function () { run('detail'); });
+  sumBtn.addEventListener('click', function () { run('sum'); });
+}
+
+/* 탭 레지스트리 — 이후 단계는 render 만 채운다. stage 가 있으면 '준비 중' 표시 */
+const TABS = {
+  STAFF: [
+    { id: 'home', label: '시작', render: renderHome },
+    { id: 'clock', label: '출퇴근', render: renderClock },
+    { id: 'mine', label: '내 기록', render: renderMine }
+  ],
+  GM: [
+    { id: 'home', label: '시작', render: renderHome },
+    { id: 'clock', label: '내 출퇴근', render: renderClock },
+    { id: 'mine', label: '내 기록', render: renderMine },
+    { id: 'today', label: '오늘 현황', render: renderToday },
+    { id: 'plan', label: '월간 계획', render: renderPlan },
+    { id: 'staff', label: '직원', render: renderStaff },
+    { id: 'codes', label: '근무코드', render: renderCodes },
+    { id: 'review', label: '근태 검토', render: renderReview },
+    { id: 'export', label: '엑셀 저장', stage: '7-6', render: renderExport }
+  ],
+  HQ: [
+    { id: 'home', label: '시작', render: renderHome },
+    { id: 'today', label: '전 지점 현황', render: renderToday },
+    { id: 'plan', label: '월간 계획', render: renderPlan },
+    { id: 'branches', label: '지점', render: renderBranches },
+    { id: 'staff', label: '직원', render: renderStaff },
+    { id: 'codes', label: '근무코드', render: renderCodes },
+    { id: 'review', label: '근태 검토', render: renderReview },
+    { id: 'export', label: '엑셀 저장', stage: '7-6', render: renderExport }
+  ]
+};
+
+/* 여러 화면에서 공통으로 처리할 오류. true 를 돌려주면 이미 처리됨 */
+function handleCommonError(e) {
+  if (!(e instanceof ApiError)) return false;
+  if (e.code === 'AUTH') return true; // onAuthLost 가 로그인 화면으로 이동
+  if (e.code === 'PIN_CHANGE_REQUIRED') { Session.updateUser({ pin_must_change: true }); route(); return true; }
+  return false;
+}
+
+let currentTab = null;
+let renderSeq = 0;
+function showShell() {
+  const sess = Session.get();
+  if (!sess) { showLogin(); return; }
+  const user = sess.user;
+  const tabs = TABS[user.role];
+  if (!tabs) { showFatal('이 계정의 역할을 확인할 수 없어요. 관리자에게 문의해 주세요.'); return; }
+  if (!currentTab || !tabs.some(function (t) { return t.id === currentTab; })) currentTab = tabs[0].id;
+  Google.setHandler(null);
+  startExpiryTimer();
+
+  const main = h('main', { id: 'main' });
+  const nav = h('nav', { class: 'nav', 'aria-label': '메뉴' });
+  const select = function (id) {
+    currentTab = id;
+    Array.prototype.forEach.call(nav.children, function (b) {
+      if (b.dataset.id === id) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+    });
+    const seq = ++renderSeq;
+    main.replaceChildren();
+    const tab = tabs.filter(function (t) { return t.id === id; })[0];
+    try {
+      tab.render(main, { user: user, go: select, isCurrent: function () { return seq === renderSeq; } });
+    } catch (e) {
+      console.error(e);
+      main.replaceChildren(h('p', { class: 'msg bad', role: 'alert' }, '이 화면을 표시하지 못했어요. 새로고침 후 다시 시도해 주세요.'));
+    }
+  };
+  tabs.forEach(function (t) {
+    nav.append(h('button', { type: 'button', 'data-id': t.id, onclick: function () { select(t.id); } },
+      t.label, t.stage ? h('span', { class: 'soon' }, t.stage) : null));
+  });
+
+  const app = h('div', { class: 'app' },
+    h('header', { class: 'bar' },
+      h('div', null, h('h1', null, 'AZMT 근태 통합 시스템'),
+        h('div', { class: 'who' }, h('b', null, user.name), ' · ' + (ROLE_LABEL[user.role] || user.role) + ' · ' + (user.branch_name || user.branch_id || '-'))),
+      h('div', { class: 'actions' },
+        h('button', { type: 'button', class: 'btn small', onclick: function () { showChangePin(false); } }, 'PIN 변경'),
+        h('button', { type: 'button', class: 'btn small', onclick: function () { doLogout(); } }, '로그아웃'))),
+    nav, main,
+    h('p', { class: 'ver' }, 'v' + CONFIG.VERSION));
+  root.replaceChildren(app);
+  select(currentTab);
+}
+
+function showFatal(text) {
+  mount(h('div', { class: 'auth' }, h('main', { class: 'auth-card' }, h('h1', null, '이용할 수 없어요'), h('p', { class: 'msg bad', role: 'alert' }, text),
+    h('button', { type: 'button', class: 'btn small', style: 'margin-top:12px', onclick: function () { doLogout(); } }, '로그아웃'))));
+}
+
+/* ===================== 라우팅 · 시작 ===================== */
+function route() {
+  const s = Session.get();
+  if (!s) { showLogin(); return; }
+  if (s.user.pin_must_change) { stopExpiryTimer(); startExpiryTimer(); showChangePin(true); return; }
+  showShell();
+}
+
+Api.onAuthLost = function (msg) { showLogin(msg || '로그인이 만료되었어요. 다시 로그인해 주세요.'); };
+
+async function boot() {
+  const s = Session.get();
+  if (!s) { showLogin(); return; }
+  mount(h('div', { class: 'auth' }, h('main', { class: 'auth-card' }, h('h1', null, '확인하는 중…'), h('p', { class: 'sub' }, '로그인 상태를 확인하고 있어요.'))));
+  try {
+    const r = await apiCall('me');
+    if (!r || !r.user || !r.user.role) throw new ApiError('BAD_RESPONSE', '서버 응답 형식이 올바르지 않습니다.');
+    Session.updateUser(r.user);
+    route();
+  } catch (e) {
+    if (e instanceof ApiError && e.code === 'AUTH') return; // onAuthLost 가 처리
+    mount(h('div', { class: 'auth' }, h('main', { class: 'auth-card' },
+      h('h1', null, '연결할 수 없어요'), h('p', { class: 'msg bad', role: 'alert' }, friendly(e)),
+      h('div', { style: 'display:flex;gap:8px;margin-top:12px' },
+        h('button', { type: 'button', class: 'btn primary small', onclick: boot, 'data-autofocus': '1' }, '다시 시도'),
+        h('button', { type: 'button', class: 'btn small', onclick: function () { Session.clear(); showLogin(); } }, '로그아웃')))));
+  }
+}
+boot();
+
+</script>
+</body>
+</html>
